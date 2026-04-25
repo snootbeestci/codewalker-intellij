@@ -1,0 +1,15 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <id>com.snootbeestci.codewalker</id>
+    <name>Codewalker</name>
+    <vendor>snootbeestci</vendor>
+
+    <description><![CDATA[
+        AI-powered code walkthrough and review. Walk through code step by step with Claude narration.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+    </extensions>
+</idea-plugin>
