@@ -69,9 +69,7 @@ class CodewalkerSettingsPanel {
         val settings = CodewalkerSettings.getInstance()
         backendAddressField.text = settings.state.backendAddress
         experienceLevelCombo.selectedItem = displayLabel(settings.state.experienceLevel)
-        val token = PasswordSafe.instance.getPassword(credentialAttributes) ?: ""
-        githubTokenField.setPassword(token.toCharArray())
-        token.toCharArray().fill('\u0000') // zero out immediately after use
+        githubTokenField.text = PasswordSafe.instance.getPassword(credentialAttributes) ?: ""
     }
 
     private fun selectedExperienceLevel(): String = when (experienceLevelCombo.selectedItem) {
