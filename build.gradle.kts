@@ -17,6 +17,10 @@ repositories {
     mavenCentral()
     maven {
         url = uri("https://maven.pkg.github.com/snootbeestci/codewalker")
+        credentials {
+            username = providers.environmentVariable("GITHUB_ACTOR").orNull ?: "token"
+            password = providers.environmentVariable("GITHUB_TOKEN").orNull
+        }
     }
     intellijPlatform {
         defaultRepositories()
