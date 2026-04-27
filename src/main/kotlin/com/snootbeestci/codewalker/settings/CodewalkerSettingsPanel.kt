@@ -2,8 +2,8 @@ package com.snootbeestci.codewalker.settings
 
 import com.intellij.credentialStore.CredentialAttributes
 import com.intellij.ide.passwordSafe.PasswordSafe
-import com.intellij.ui.ComboBox
 import com.intellij.ui.components.JBTextField
+import javax.swing.JComboBox
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import java.awt.Insets
@@ -14,7 +14,7 @@ import javax.swing.JPasswordField
 class CodewalkerSettingsPanel {
     val root: JPanel = JPanel(GridBagLayout())
     private val backendAddressField = JBTextField()
-    private val experienceLevelCombo = ComboBox(arrayOf("Junior", "Mid", "Senior"))
+    private val experienceLevelCombo = JComboBox(arrayOf("Junior", "Mid", "Senior"))
     private val githubTokenField = JPasswordField()
 
     private val credentialAttributes = CredentialAttributes("Codewalker.GitHubToken")
