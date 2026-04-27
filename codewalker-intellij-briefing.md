@@ -40,7 +40,10 @@ dependency in `build.gradle.kts`:
 implementation("com.github.snootbeestci:codewalker-proto:{version}")
 ```
 
-The package is public — no authentication required to pull it.
+GitHub Packages requires authentication even for public packages. CI must
+pass `GITHUB_TOKEN` as an env var and declare `packages: read` permission.
+In `build.gradle.kts` the repository block must include a `credentials`
+block reading `GITHUB_ACTOR` / `GITHUB_TOKEN` from environment variables.
 Never copy the `.proto` file into this repo.
 
 ---
