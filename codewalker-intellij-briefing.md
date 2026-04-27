@@ -33,17 +33,17 @@ JetBrains IDE — PhpStorm, GoLand, WebStorm, PyCharm, IntelliJ IDEA etc.
 ## Proto stubs
 
 The gRPC API is defined in the backend repo. Versioned Kotlin stubs are
-published to GitHub Packages on each backend release and declared as a
-dependency in `build.gradle.kts`:
+served via JitPack and declared as a dependency in `build.gradle.kts`:
 
 ```kotlin
-implementation("com.github.snootbeestci:codewalker-proto:{version}")
+maven { url = uri("https://jitpack.io") }
+
+implementation("com.github.snootbeestci:codewalker-proto:{tag}")
 ```
 
-GitHub Packages requires authentication even for public packages. CI must
-pass `GITHUB_TOKEN` as an env var and declare `packages: read` permission.
-In `build.gradle.kts` the repository block must include a `credentials`
-block reading `GITHUB_ACTOR` / `GITHUB_TOKEN` from environment variables.
+The version string must use the full Git tag (e.g. `v0.1.0`), not a plain
+semver, because JitPack keys builds on the tag name. No credentials are
+needed — JitPack serves public repos without authentication.
 Never copy the `.proto` file into this repo.
 
 ---
@@ -124,10 +124,9 @@ When opening a review session the plugin resolves a forge token as follows:
 - Collect gRPC flows with `.collect {}` — always handle token, complete, and error variants
 - UI updates must be dispatched via `withContext(Dispatchers.Main)`
 - Prefer `JBTextField`, `JBPasswordField` etc. from `com.intellij.ui.components`
-  over raw Swing equivalents where available
-- **Do not use `com.intellij.ui.ComboBox`** — it lives in `lib/modules/` in
-  IntelliJ 2025.1 and is absent from the plugin compilation classpath; use
-  `javax.swing.JComboBox` instead
+  over raw Swing equivalents — but verify the class is available on the plugin
+  compilation classpath before using it. `com.intellij.ui.ComboBox` is a known
+  example that is absent in IntelliJ 2025.1; use `javax.swing.JComboBox` instead.
 
 ### Build
 - `./gradlew runIde` — launches a sandboxed IDE with the plugin installed
