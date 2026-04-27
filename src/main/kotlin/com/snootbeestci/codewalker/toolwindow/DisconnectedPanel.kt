@@ -47,6 +47,10 @@ class DisconnectedPanel {
         update(CodewalkerClient.ConnectionState.DISCONNECTED)
     }
 
+    fun dispose() {
+        scope.cancel()
+    }
+
     fun update(state: CodewalkerClient.ConnectionState) {
         messageLabel.text = when (state) {
             CodewalkerClient.ConnectionState.INCOMPATIBLE ->

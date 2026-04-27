@@ -48,4 +48,8 @@ class CodewalkerPanel(project: Project) {
 
     fun showLoading() = (root.layout as CardLayout).show(root, "LOADING")
     fun showSession() = (root.layout as CardLayout).show(root, "SESSION")
+
+    fun dispose() {
+        disconnectedPanel.dispose()
+    }
 }
