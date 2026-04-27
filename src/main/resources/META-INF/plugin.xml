@@ -17,5 +17,9 @@
                 parentId="tools"
                 id="com.snootbeestci.codewalker.settings.CodewalkerSettingsConfigurable"
                 displayName="Codewalker"/>
+        <applicationService
+            serviceImplementation="com.snootbeestci.codewalker.grpc.CodewalkerClient"/>
+        <postStartupActivity
+            implementation="com.snootbeestci.codewalker.grpc.CodewalkerStartupActivity"/>
     </extensions>
 </idea-plugin>
