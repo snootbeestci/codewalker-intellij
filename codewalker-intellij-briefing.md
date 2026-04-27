@@ -124,10 +124,9 @@ When opening a review session the plugin resolves a forge token as follows:
 - Collect gRPC flows with `.collect {}` — always handle token, complete, and error variants
 - UI updates must be dispatched via `withContext(Dispatchers.Main)`
 - Prefer `JBTextField`, `JBPasswordField` etc. from `com.intellij.ui.components`
-  over raw Swing equivalents where available
-- **Do not use `com.intellij.ui.ComboBox`** — it lives in `lib/modules/` in
-  IntelliJ 2025.1 and is absent from the plugin compilation classpath; use
-  `javax.swing.JComboBox` instead
+  over raw Swing equivalents — but verify the class is available on the plugin
+  compilation classpath before using it. `com.intellij.ui.ComboBox` is a known
+  example that is absent in IntelliJ 2025.1; use `javax.swing.JComboBox` instead.
 
 ### Build
 - `./gradlew runIde` — launches a sandboxed IDE with the plugin installed
