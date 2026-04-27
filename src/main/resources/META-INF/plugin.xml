@@ -21,5 +21,10 @@
             serviceImplementation="com.snootbeestci.codewalker.grpc.CodewalkerClient"/>
         <postStartupActivity
             implementation="com.snootbeestci.codewalker.grpc.CodewalkerStartupActivity"/>
+        <toolWindow
+            id="Codewalker"
+            anchor="right"
+            factoryClass="com.snootbeestci.codewalker.toolwindow.CodewalkerToolWindowFactory"
+            icon="/icons/codewalker.svg"/>
     </extensions>
 </idea-plugin>
