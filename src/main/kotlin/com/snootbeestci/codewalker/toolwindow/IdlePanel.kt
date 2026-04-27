@@ -1,5 +1,6 @@
 package com.snootbeestci.codewalker.toolwindow
 
+import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBTextField
 import com.snootbeestci.codewalker.settings.CodewalkerSettings
 import java.awt.GridBagConstraints
@@ -18,6 +19,10 @@ class IdlePanel {
     private val urlField = JBTextField()
     private val experienceLevelCombo = JComboBox(arrayOf("Junior", "Mid", "Senior"))
     private val openReviewButton = JButton("Open Review")
+    private val errorLabel = JLabel("").apply {
+        foreground = JBColor.RED
+        isVisible = false
+    }
 
     init {
         val settings = CodewalkerSettings.getInstance()
@@ -47,10 +52,34 @@ class IdlePanel {
         root.add(urlField, gbc(1, GridBagConstraints.HORIZONTAL, 1.0))
         root.add(experienceLevelCombo, gbc(2, GridBagConstraints.HORIZONTAL, 1.0))
         root.add(openReviewButton, gbc(3))
+        root.add(errorLabel, gbc(4, GridBagConstraints.HORIZONTAL, 1.0))
 
         root.add(JPanel(), GridBagConstraints().apply {
-            gridy = 4; weighty = 1.0; fill = GridBagConstraints.VERTICAL
+            gridy = 5; weighty = 1.0; fill = GridBagConstraints.VERTICAL
         })
+    }
+
+    fun getUrl(): String = urlField.text
+    fun getExperienceLevel(): String = selectedExperienceLevel()
+
+    fun setOpenReviewAction(action: () -> Unit) {
+        openReviewButton.addActionListener { action() }
+    }
+
+    fun showError(message: String) {
+        errorLabel.text = message
+        errorLabel.isVisible = true
+    }
+
+    fun clearError() {
+        errorLabel.text = ""
+        errorLabel.isVisible = false
+    }
+
+    private fun selectedExperienceLevel(): String = when (experienceLevelCombo.selectedItem) {
+        "Junior" -> "EXPERIENCE_LEVEL_JUNIOR"
+        "Senior" -> "EXPERIENCE_LEVEL_SENIOR"
+        else -> "EXPERIENCE_LEVEL_MID"
     }
 
     private fun displayLabel(level: String): String = when (level) {

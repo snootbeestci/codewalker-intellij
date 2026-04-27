@@ -4,6 +4,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.snootbeestci.codewalker.grpc.CodewalkerClient
 import com.snootbeestci.codewalker.grpc.ConnectionStateListener
+import com.snootbeestci.codewalker.session.ReviewSessionController
 import java.awt.CardLayout
 import javax.swing.JPanel
 
@@ -12,8 +13,8 @@ class CodewalkerPanel(project: Project) {
     val root: JPanel = JPanel(CardLayout())
 
     private val disconnectedPanel = DisconnectedPanel()
-    private val idlePanel = IdlePanel()
-    private val loadingPanel = LoadingPanel()
+    internal val idlePanel = IdlePanel()
+    internal val loadingPanel = LoadingPanel()
     private val sessionPanel = SessionPanel()
 
     init {
@@ -32,6 +33,7 @@ class CodewalkerPanel(project: Project) {
         )
 
         showState(CodewalkerClient.getInstance().connectionState)
+        ReviewSessionController(this)
     }
 
     fun showState(state: CodewalkerClient.ConnectionState) {
@@ -48,6 +50,11 @@ class CodewalkerPanel(project: Project) {
 
     fun showLoading() = (root.layout as CardLayout).show(root, "LOADING")
     fun showSession() = (root.layout as CardLayout).show(root, "SESSION")
+
+    fun showError(message: String) {
+        idlePanel.showError(message)
+        (root.layout as CardLayout).show(root, "IDLE")
+    }
 
     fun dispose() {
         disconnectedPanel.dispose()

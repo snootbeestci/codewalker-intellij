@@ -12,11 +12,10 @@ class LoadingPanel {
 
     val root: JPanel = JPanel(GridBagLayout())
     val progressLabel = JLabel("Loading…")
+    val progressBar = JProgressBar(0, 100).apply { isIndeterminate = false }
+    val cancelButton = JButton("Cancel")
 
     init {
-        val progressBar = JProgressBar().apply { isIndeterminate = true }
-        val cancelButton = JButton("Cancel")
-
         fun gbc(row: Int, fill: Int = GridBagConstraints.NONE, weightx: Double = 0.0) =
             GridBagConstraints().apply {
                 gridx = 0; gridy = row
@@ -33,5 +32,10 @@ class LoadingPanel {
         root.add(JPanel(), GridBagConstraints().apply {
             gridy = 3; weighty = 1.0; fill = GridBagConstraints.VERTICAL
         })
+    }
+
+    fun updateProgress(message: String, percent: Int) {
+        progressLabel.text = message
+        progressBar.value = percent
     }
 }
