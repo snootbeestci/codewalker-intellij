@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - 'claude/**'
   pull_request:
 
 jobs:
@@ -13,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: read
 
     steps:
       - name: Checkout
@@ -29,6 +29,8 @@ jobs:
 
       - name: Build plugin
         run: ./gradlew buildPlugin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

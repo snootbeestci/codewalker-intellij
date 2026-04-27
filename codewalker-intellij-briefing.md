@@ -40,7 +40,10 @@ dependency in `build.gradle.kts`:
 implementation("com.github.snootbeestci:codewalker-proto:{version}")
 ```
 
-The package is public — no authentication required to pull it.
+GitHub Packages requires authentication even for public packages. CI must
+pass `GITHUB_TOKEN` as an env var and declare `packages: read` permission.
+In `build.gradle.kts` the repository block must include a `credentials`
+block reading `GITHUB_ACTOR` / `GITHUB_TOKEN` from environment variables.
 Never copy the `.proto` file into this repo.
 
 ---
@@ -120,8 +123,11 @@ When opening a review session the plugin resolves a forge token as follows:
 - Use coroutines for all gRPC calls — never `runBlocking` on the UI thread
 - Collect gRPC flows with `.collect {}` — always handle token, complete, and error variants
 - UI updates must be dispatched via `withContext(Dispatchers.Main)`
-- Prefer `JBPopup`, `ComboBox`, `JBTextField` etc. from the IntelliJ UI DSL
-  over raw Swing components where available
+- Prefer `JBTextField`, `JBPasswordField` etc. from `com.intellij.ui.components`
+  over raw Swing equivalents where available
+- **Do not use `com.intellij.ui.ComboBox`** — it lives in `lib/modules/` in
+  IntelliJ 2025.1 and is absent from the plugin compilation classpath; use
+  `javax.swing.JComboBox` instead
 
 ### Build
 - `./gradlew runIde` — launches a sandboxed IDE with the plugin installed

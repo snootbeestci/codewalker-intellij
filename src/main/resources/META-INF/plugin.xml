@@ -11,5 +11,11 @@
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
+        <applicationService serviceImplementation="com.snootbeestci.codewalker.settings.CodewalkerSettings"/>
+        <applicationConfigurable
+                instance="com.snootbeestci.codewalker.settings.CodewalkerSettingsConfigurable"
+                parentId="tools"
+                id="com.snootbeestci.codewalker.settings.CodewalkerSettingsConfigurable"
+                displayName="Codewalker"/>
     </extensions>
 </idea-plugin>
