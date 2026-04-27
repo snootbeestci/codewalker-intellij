@@ -5,6 +5,7 @@ import com.snootbeestci.codewalker.settings.CodewalkerSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
