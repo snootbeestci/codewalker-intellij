@@ -16,6 +16,7 @@ class CodewalkerPanel(project: Project) {
     internal val idlePanel = IdlePanel()
     internal val loadingPanel = LoadingPanel()
     private val sessionPanel = SessionPanel()
+    private val controller = ReviewSessionController(this)
 
     init {
         root.add(disconnectedPanel.root, "DISCONNECTED")
@@ -33,7 +34,6 @@ class CodewalkerPanel(project: Project) {
         )
 
         showState(CodewalkerClient.getInstance().connectionState)
-        ReviewSessionController(this)
     }
 
     fun showState(state: CodewalkerClient.ConnectionState) {
@@ -57,6 +57,7 @@ class CodewalkerPanel(project: Project) {
     }
 
     fun dispose() {
+        controller.dispose()
         disconnectedPanel.dispose()
     }
 }

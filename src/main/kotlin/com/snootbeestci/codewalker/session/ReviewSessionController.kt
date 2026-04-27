@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -92,6 +93,11 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
                 withContext(Dispatchers.Main) { panel.showError(msg) }
             }
         }
+    }
+
+    fun dispose() {
+        cancel()
+        scope.cancel()
     }
 
     private fun cancel() {
