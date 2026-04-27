@@ -1,10 +1,10 @@
 package com.snootbeestci.codewalker.session
 
-import codewalker.v1.ExperienceLevel
-import codewalker.v1.ForgeContext
-import codewalker.v1.GlossaryTerm
-import codewalker.v1.SessionEvent
-import codewalker.v1.Step
+import codewalker.v1.Codewalker.ExperienceLevel
+import codewalker.v1.Codewalker.ForgeContext
+import codewalker.v1.Codewalker.GlossaryTerm
+import codewalker.v1.Codewalker.SessionEvent
+import codewalker.v1.Codewalker.Step
 import codewalker.v1.openReviewSessionRequest
 import com.intellij.credentialStore.CredentialAttributes
 import com.intellij.ide.passwordSafe.PasswordSafe
