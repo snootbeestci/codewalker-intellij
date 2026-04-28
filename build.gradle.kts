@@ -22,7 +22,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.github.snootbeestci:codewalker-proto:v0.1.0") {
+    implementation("com.github.snootbeestci:codewalker-proto:v0.2.0") {
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core-jvm")
     }
