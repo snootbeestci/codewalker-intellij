@@ -178,9 +178,10 @@ class SessionPanel(private val project: Project) {
         }
         forwardButton.isEnabled = hasForward
         backButton.isEnabled = complete.breadcrumbList.size > 1
+    }
 
-        val step = controller?.steps?.firstOrNull { it.id == complete.stepId }
-        if (step != null && step.hasHunkSpan()) {
+    fun applyHighlightFor(step: Step) {
+        if (step.hasHunkSpan()) {
             val span = step.hunkSpan
             highlighter.highlightHunk(span.filePath, span.newStart, span.newLines)
         }
