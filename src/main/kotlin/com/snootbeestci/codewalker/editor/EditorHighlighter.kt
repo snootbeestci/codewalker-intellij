@@ -1,5 +1,6 @@
 package com.snootbeestci.codewalker.editor
 
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.ScrollType
@@ -65,10 +66,12 @@ class EditorHighlighter(private val project: Project) {
 
     private fun findFile(filePath: String): VirtualFile? {
         val fileName = filePath.substringAfterLast('/')
-        return FilenameIndex.getVirtualFilesByName(
-            fileName,
-            GlobalSearchScope.projectScope(project)
-        ).firstOrNull { it.path.endsWith(filePath) }
+        return ReadAction.compute<VirtualFile?, RuntimeException> {
+            FilenameIndex.getVirtualFilesByName(
+                fileName,
+                GlobalSearchScope.projectScope(project)
+            ).firstOrNull { it.path.endsWith(filePath) }
+        }
     }
 
     private fun openOrFocus(file: VirtualFile): Editor? {
