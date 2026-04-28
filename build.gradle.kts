@@ -24,7 +24,10 @@ repositories {
 dependencies {
     implementation("com.github.snootbeestci:codewalker-proto:v0.1.0")
     implementation("io.grpc:grpc-okhttp:1.60.0")
-    implementation("io.grpc:grpc-kotlin-stub:1.4.1")
+    implementation("io.grpc:grpc-kotlin-stub:1.4.1") {
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
+    }
+    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     intellijPlatform {
         create(providers.gradleProperty("platformType").get(), providers.gradleProperty("platformVersion").get())
         pluginVerifier()
