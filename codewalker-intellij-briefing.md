@@ -127,6 +127,10 @@ When opening a review session the plugin resolves a forge token as follows:
   over raw Swing equivalents — but verify the class is available on the plugin
   compilation classpath before using it. `com.intellij.ui.ComboBox` is a known
   example that is absent in IntelliJ 2025.1; use `javax.swing.JComboBox` instead.
+- Editor integration uses `FileEditorManager.openTextEditor()` to open files
+  and `editor.markupModel.addRangeHighlighter()` for transient highlights.
+  Always call `RangeHighlighter.dispose()` to clean up — never let highlights
+  accumulate across sessions.
 
 ### Build
 - `./gradlew runIde` — launches a sandboxed IDE with the plugin installed

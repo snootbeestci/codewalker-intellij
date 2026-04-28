@@ -3,7 +3,9 @@ package com.snootbeestci.codewalker.toolwindow
 import codewalker.v1.Codewalker.EdgeLabel
 import codewalker.v1.Codewalker.Step
 import codewalker.v1.Codewalker.StepComplete
+import com.intellij.openapi.project.Project
 import com.intellij.ui.components.JBScrollPane
+import com.snootbeestci.codewalker.editor.EditorHighlighter
 import com.snootbeestci.codewalker.session.NavigationController
 import com.snootbeestci.codewalker.session.ReviewSessionController
 import java.awt.BorderLayout
@@ -23,9 +25,11 @@ import javax.swing.JTextPane
 import javax.swing.ListSelectionModel
 import javax.swing.SwingConstants
 
-class SessionPanel {
+class SessionPanel(private val project: Project) {
 
     val root: JPanel = JPanel(GridBagLayout())
+
+    private val highlighter = EditorHighlighter(project)
 
     private val titleLabel = JLabel("Codewalker")
     private val languageLabel = JLabel(" ")
@@ -150,6 +154,7 @@ class SessionPanel {
     fun dispose() {
         navigationController?.dispose()
         navigationController = null
+        highlighter.dispose()
     }
 
     fun clearNarration() {
@@ -171,6 +176,12 @@ class SessionPanel {
         }
         forwardButton.isEnabled = hasForward
         backButton.isEnabled = complete.breadcrumbList.size > 1
+
+        val step = controller?.steps?.firstOrNull { it.id == complete.stepId }
+        if (step != null && step.hasHunkSpan()) {
+            val span = step.hunkSpan
+            highlighter.highlightHunk(span.filePath, span.newStart, span.newLines)
+        }
     }
 
     private fun updateBreadcrumb(crumbs: List<String>) {
