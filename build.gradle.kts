@@ -22,7 +22,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.github.snootbeestci:codewalker-proto:v0.1.9")
+    implementation("com.github.snootbeestci:codewalker-proto:v0.1.0")
     implementation("io.grpc:grpc-okhttp:1.60.0")
     implementation("io.grpc:grpc-kotlin-stub:1.4.1") {
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
