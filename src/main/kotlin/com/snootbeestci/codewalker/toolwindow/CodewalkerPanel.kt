@@ -15,7 +15,7 @@ class CodewalkerPanel(project: Project) {
     private val disconnectedPanel = DisconnectedPanel()
     internal val idlePanel = IdlePanel()
     internal val loadingPanel = LoadingPanel()
-    private val sessionPanel = SessionPanel()
+    private val sessionPanel = SessionPanel(project)
     private val controller = ReviewSessionController(this)
 
     init {
