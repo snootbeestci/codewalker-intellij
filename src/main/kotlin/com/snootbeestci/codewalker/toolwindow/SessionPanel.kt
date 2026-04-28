@@ -182,8 +182,7 @@ class SessionPanel(private val project: Project) {
 
     fun applyHighlightFor(step: Step) {
         if (step.hasHunkSpan()) {
-            val span = step.hunkSpan
-            highlighter.highlightHunk(span.filePath, span.newStart, span.newLines)
+            highlighter.highlightHunk(step.hunkSpan)
         }
     }
 
