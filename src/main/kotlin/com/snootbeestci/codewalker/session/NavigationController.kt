@@ -2,6 +2,7 @@ package com.snootbeestci.codewalker.session
 
 import codewalker.v1.Codewalker.NavigateRequest
 import codewalker.v1.Codewalker.SimpleDirection
+import codewalker.v1.Codewalker.Step
 import codewalker.v1.navigateRequest
 import com.snootbeestci.codewalker.grpc.CodewalkerClient
 import com.snootbeestci.codewalker.toolwindow.SessionPanel
@@ -21,20 +22,42 @@ class NavigationController(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var navigateJob: Job? = null
 
-    fun navigateForward() = navigate(navigateRequest {
-        sessionId = controller.sessionId!!
-        direction = SimpleDirection.SIMPLE_DIRECTION_FORWARD
-    })
+    fun navigateForward() {
+        val nextStep = findNextStep() ?: return
+        panel.applyHighlightFor(nextStep)
+        navigate(navigateRequest {
+            sessionId = controller.sessionId!!
+            direction = SimpleDirection.SIMPLE_DIRECTION_FORWARD
+        })
+    }
 
-    fun navigateBack() = navigate(navigateRequest {
-        sessionId = controller.sessionId!!
-        direction = SimpleDirection.SIMPLE_DIRECTION_BACK
-    })
+    fun navigateBack() {
+        val previousStep = findPreviousStep() ?: return
+        panel.applyHighlightFor(previousStep)
+        navigate(navigateRequest {
+            sessionId = controller.sessionId!!
+            direction = SimpleDirection.SIMPLE_DIRECTION_BACK
+        })
+    }
 
-    fun navigateTo(stepId: String) = navigate(navigateRequest {
-        sessionId = controller.sessionId!!
-        this.stepId = stepId
-    })
+    fun navigateTo(stepId: String) {
+        val step = controller.steps.firstOrNull { it.id == stepId } ?: return
+        panel.applyHighlightFor(step)
+        navigate(navigateRequest {
+            sessionId = controller.sessionId!!
+            this.stepId = stepId
+        })
+    }
+
+    private fun findNextStep(): Step? {
+        val currentIdx = controller.steps.indexOfFirst { it.id == controller.currentStepId }
+        return controller.steps.getOrNull(currentIdx + 1)
+    }
+
+    private fun findPreviousStep(): Step? {
+        val currentIdx = controller.steps.indexOfFirst { it.id == controller.currentStepId }
+        return controller.steps.getOrNull(currentIdx - 1)
+    }
 
     private fun navigate(request: NavigateRequest) {
         navigateJob?.cancel()

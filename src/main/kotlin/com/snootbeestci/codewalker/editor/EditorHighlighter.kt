@@ -1,5 +1,6 @@
 package com.snootbeestci.codewalker.editor
 
+import codewalker.v1.Codewalker.HunkSpan
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
@@ -26,12 +27,12 @@ class EditorHighlighter(private val project: Project) {
     private var currentHighlighters: List<RangeHighlighter> = emptyList()
     private var currentEditor: Editor? = null
 
-    fun highlightHunk(filePath: String, newStart: Int, newLines: Int) {
+    fun highlightHunk(span: HunkSpan) {
         clearHighlight()
 
-        val virtualFile = findFile(filePath)
+        val virtualFile = findFile(span.filePath)
         if (virtualFile == null) {
-            log.debug("Codewalker: file not found in project: $filePath (basePath=${project.basePath})")
+            log.debug("Codewalker: file not found in project: ${span.filePath} (basePath=${project.basePath})")
             return
         }
         val editor = openOrFocus(virtualFile)
@@ -43,9 +44,7 @@ class EditorHighlighter(private val project: Project) {
         currentEditor = editor
 
         val document = editor.document
-        val startOffset = document.getLineStartOffset((newStart - 1).coerceAtLeast(0))
-        val endLine = (newStart + newLines - 2).coerceAtMost(document.lineCount - 1)
-        val endOffset = document.getLineEndOffset(endLine)
+        val ranges = computeAddedLineRanges(span.rawDiff, span.newStart)
 
         val attributes = TextAttributes().apply {
             backgroundColor = JBColor(
@@ -54,18 +53,23 @@ class EditorHighlighter(private val project: Project) {
             )
         }
 
-        val highlighter = editor.markupModel.addRangeHighlighter(
-            startOffset,
-            endOffset,
-            HighlighterLayer.SELECTION - 1,
-            attributes,
-            HighlighterTargetArea.EXACT_RANGE
-        )
+        currentHighlighters = ranges.map { range ->
+            val startLine = (range.first - 1).coerceAtLeast(0)
+            val endLine = (range.last - 1).coerceAtMost(document.lineCount - 1)
+            val startOffset = document.getLineStartOffset(startLine)
+            val endOffset = document.getLineEndOffset(endLine)
+            editor.markupModel.addRangeHighlighter(
+                startOffset,
+                endOffset,
+                HighlighterLayer.SELECTION - 1,
+                attributes,
+                HighlighterTargetArea.EXACT_RANGE
+            )
+        }
 
-        currentHighlighters = listOf(highlighter)
-
+        val scrollLine = (ranges.firstOrNull()?.first ?: span.newStart) - 1
         editor.scrollingModel.scrollTo(
-            LogicalPosition(newStart - 1, 0),
+            LogicalPosition(scrollLine.coerceAtLeast(0), 0),
             ScrollType.CENTER
         )
     }
@@ -99,5 +103,48 @@ class EditorHighlighter(private val project: Project) {
 
     fun dispose() {
         clearHighlight()
+    }
+
+    companion object {
+        // Walks a unified-diff hunk body and returns line ranges in the new file
+        // covering only added (`+`) lines. Context (` `) and removed (`-`) lines
+        // are skipped so the highlight tracks just the change.
+        internal fun computeAddedLineRanges(rawDiff: String, newStart: Int): List<IntRange> {
+            if (rawDiff.isEmpty()) return emptyList()
+            val ranges = mutableListOf<IntRange>()
+            var currentNewLine = newStart
+            var rangeStart: Int? = null
+
+            for (line in rawDiff.lineSequence()) {
+                if (line.startsWith("@@") || line.startsWith("+++") || line.startsWith("---")) {
+                    continue
+                }
+                when {
+                    line.startsWith("+") -> {
+                        if (rangeStart == null) rangeStart = currentNewLine
+                        currentNewLine++
+                    }
+                    line.startsWith("-") -> {
+                        // present only in old file; do not advance new-file counter
+                    }
+                    line.startsWith("\\") -> {
+                        // "\ No newline at end of file" marker
+                    }
+                    else -> {
+                        // context line (" " prefix or empty line within hunk body)
+                        if (rangeStart != null) {
+                            ranges.add(rangeStart..(currentNewLine - 1))
+                            rangeStart = null
+                        }
+                        currentNewLine++
+                    }
+                }
+            }
+
+            if (rangeStart != null) {
+                ranges.add(rangeStart..(currentNewLine - 1))
+            }
+            return ranges
+        }
     }
 }

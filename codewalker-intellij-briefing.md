@@ -141,6 +141,9 @@ When opening a review session the plugin resolves a forge token as follows:
 - `./gradlew buildPlugin` — produces a distributable `.zip`
 - `./gradlew check` — runs tests and verifications
 - Always run `./gradlew check` before submitting a PR
+- All non-trivial logic must ship with unit tests in the same PR — not as a follow-up
+- Use JUnit 5 (`org.junit.jupiter.api`) for new tests
+- Test files mirror the package structure under `src/test/kotlin/`
 
 ### Briefing and README
 - If your change introduces a new architectural decision, append it here
