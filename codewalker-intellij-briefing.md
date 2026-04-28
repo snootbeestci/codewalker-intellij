@@ -131,6 +131,10 @@ When opening a review session the plugin resolves a forge token as follows:
   and `editor.markupModel.addRangeHighlighter()` for transient highlights.
   Always call `RangeHighlighter.dispose()` to clean up — never let highlights
   accumulate across sessions.
+- Index lookups (`FilenameIndex`, `ProjectFileIndex`, PSI traversal etc.)
+  require a read action — wrap them in `ReadAction.compute { ... }` when
+  called from the EDT or a coroutine, otherwise IntelliJ throws
+  "Read access is allowed from inside read-action only".
 
 ### Build
 - `./gradlew runIde` — launches a sandboxed IDE with the plugin installed
