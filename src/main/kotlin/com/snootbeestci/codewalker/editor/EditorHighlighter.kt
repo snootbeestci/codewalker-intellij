@@ -1,6 +1,7 @@
 package com.snootbeestci.codewalker.editor
 
 import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.ScrollType
@@ -11,6 +12,7 @@ import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
@@ -19,14 +21,24 @@ import java.awt.Color
 
 class EditorHighlighter(private val project: Project) {
 
+    private val log = Logger.getInstance(EditorHighlighter::class.java)
+
     private var currentHighlighters: List<RangeHighlighter> = emptyList()
     private var currentEditor: Editor? = null
 
     fun highlightHunk(filePath: String, newStart: Int, newLines: Int) {
         clearHighlight()
 
-        val virtualFile = findFile(filePath) ?: return
-        val editor = openOrFocus(virtualFile) ?: return
+        val virtualFile = findFile(filePath)
+        if (virtualFile == null) {
+            log.debug("Codewalker: file not found in project: $filePath (basePath=${project.basePath})")
+            return
+        }
+        val editor = openOrFocus(virtualFile)
+        if (editor == null) {
+            log.debug("Codewalker: openTextEditor returned null for ${virtualFile.path}")
+            return
+        }
 
         currentEditor = editor
 
@@ -65,11 +77,16 @@ class EditorHighlighter(private val project: Project) {
     }
 
     private fun findFile(filePath: String): VirtualFile? {
+        val basePath = project.basePath
+        if (basePath != null) {
+            val direct = LocalFileSystem.getInstance().findFileByPath("$basePath/$filePath")
+            if (direct != null) return direct
+        }
         val fileName = filePath.substringAfterLast('/')
         return ReadAction.compute<VirtualFile?, RuntimeException> {
             FilenameIndex.getVirtualFilesByName(
                 fileName,
-                GlobalSearchScope.projectScope(project)
+                GlobalSearchScope.allScope(project)
             ).firstOrNull { it.path.endsWith(filePath) }
         }
     }
