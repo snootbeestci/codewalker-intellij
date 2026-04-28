@@ -3,6 +3,7 @@ package com.snootbeestci.codewalker.toolwindow
 import codewalker.v1.Codewalker.EdgeLabel
 import codewalker.v1.Codewalker.Step
 import codewalker.v1.Codewalker.StepComplete
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.ui.components.JBScrollPane
 import com.snootbeestci.codewalker.editor.EditorHighlighter
@@ -29,6 +30,7 @@ class SessionPanel(private val project: Project) {
 
     val root: JPanel = JPanel(GridBagLayout())
 
+    private val log = Logger.getInstance(SessionPanel::class.java)
     private val highlighter = EditorHighlighter(project)
 
     private val titleLabel = JLabel("Codewalker")
@@ -205,8 +207,11 @@ class SessionPanel(private val project: Project) {
         stepListModel.clear()
         val grouped = LinkedHashMap<String, MutableList<Step>>()
         for (step in steps) {
-            val path = step.hunkSpan.filePath.ifEmpty { "(unknown)" }
-            grouped.getOrPut(path) { mutableListOf() }.add(step)
+            val path = step.hunkSpan.filePath
+            if (path.isEmpty()) {
+                log.warn("Hunk step has empty filePath: id=${step.id}")
+            }
+            grouped.getOrPut(path.ifEmpty { "(unknown)" }) { mutableListOf() }.add(step)
         }
         for ((path, fileSteps) in grouped) {
             stepListModel.addElement(StepListItem.Header(path))
