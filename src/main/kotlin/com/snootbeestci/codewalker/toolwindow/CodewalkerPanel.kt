@@ -49,7 +49,10 @@ class CodewalkerPanel(project: Project) {
     }
 
     fun showLoading() = (root.layout as CardLayout).show(root, "LOADING")
-    fun showSession() = (root.layout as CardLayout).show(root, "SESSION")
+    fun showSession() {
+        sessionPanel.bind(controller)
+        (root.layout as CardLayout).show(root, "SESSION")
+    }
 
     fun showError(message: String) {
         idlePanel.showError(message)
@@ -58,6 +61,7 @@ class CodewalkerPanel(project: Project) {
 
     fun dispose() {
         controller.dispose()
+        sessionPanel.dispose()
         disconnectedPanel.dispose()
     }
 }
