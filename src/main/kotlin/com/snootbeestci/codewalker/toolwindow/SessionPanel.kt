@@ -17,6 +17,7 @@ import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import java.awt.Insets
 import javax.swing.BorderFactory
+import javax.swing.BoxLayout
 import javax.swing.DefaultListModel
 import javax.swing.JButton
 import javax.swing.JLabel
@@ -45,6 +46,16 @@ class SessionPanel(private val project: Project) {
     private val narrationPane = JTextPane().apply {
         isEditable = false
     }
+    private val summaryTable = SummaryTable()
+    private val narrationScroll = JBScrollPane(narrationPane).apply {
+        preferredSize = Dimension(360, 180)
+        minimumSize = Dimension(200, 120)
+    }
+    private val narrationCollapsible = CollapsibleSection(
+        title = "Detailed narration",
+        content = narrationScroll,
+        expanded = false
+    )
     private val backButton = JButton("← Back").apply { isEnabled = false }
     private val forwardButton = JButton("Forward →").apply { isEnabled = false }
 
@@ -83,11 +94,6 @@ class SessionPanel(private val project: Project) {
             minimumSize = Dimension(160, 120)
         }
 
-        val narrationScroll = JBScrollPane(narrationPane).apply {
-            preferredSize = Dimension(360, 200)
-            minimumSize = Dimension(200, 120)
-        }
-
         val navBar = JPanel(GridBagLayout()).apply {
             border = BorderFactory.createEmptyBorder(4, 8, 6, 8)
             add(backButton, GridBagConstraints().apply {
@@ -102,9 +108,15 @@ class SessionPanel(private val project: Project) {
             })
         }
 
+        val bodyColumn = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            add(summaryTable.root)
+            add(narrationCollapsible.root)
+        }
+
         val body = JPanel(BorderLayout()).apply {
             add(stepListScroll, BorderLayout.WEST)
-            add(narrationScroll, BorderLayout.CENTER)
+            add(bodyColumn, BorderLayout.CENTER)
         }
 
         fun row(component: Component, gridy: Int, weighty: Double, fill: Int) {
@@ -161,6 +173,7 @@ class SessionPanel(private val project: Project) {
 
     fun clearNarration() {
         narrationPane.text = ""
+        summaryTable.clear()
     }
 
     fun appendNarrationToken(text: String) {
@@ -173,6 +186,7 @@ class SessionPanel(private val project: Project) {
         controller?.currentStepId = complete.stepId
         updateBreadcrumb(complete.breadcrumbList)
         updateStepHighlight(complete.stepId)
+        summaryTable.update(if (complete.hasSummary()) complete.summary else null)
         val hasForward = complete.availableEdgesList.any {
             it.label == EdgeLabel.EDGE_LABEL_NEXT && it.navigable
         }

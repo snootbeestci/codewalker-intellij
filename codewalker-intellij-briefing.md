@@ -84,6 +84,23 @@ Registered as a right-side tool window. Four states managed via `CardLayout`:
 | LOADING | `OpenReviewSession` in progress |
 | SESSION | Session open, narration active |
 
+### Session body layout
+
+Inside the SESSION card, the body is split horizontally:
+
+- **West**: step list (grouped by file path)
+- **Centre**: a vertical column of
+  - `SummaryTable` — fixed two-column key/value list rendering the eight
+    `StepSummary` fields. Always visible. Empty/unset fields render as `—`
+    so the layout never collapses.
+  - `CollapsibleSection` wrapping the streamed narration `JTextPane`.
+    Collapsed by default — clicking the header toggles visibility.
+
+`SessionPanel.onStepComplete` calls `summaryTable.update(complete.summary)`
+when `complete.hasSummary()` is true, otherwise passes `null` (which clears
+the table). `SessionPanel.clearNarration` clears both the narration pane
+and the summary table.
+
 ---
 
 ## Session model
