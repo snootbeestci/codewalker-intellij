@@ -1,6 +1,10 @@
 package com.snootbeestci.codewalker.editor
 
+import com.intellij.testFramework.LightVirtualFile
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertSame
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class EditorHighlighterTest {
@@ -130,5 +134,72 @@ class EditorHighlighterTest {
         val ranges = EditorHighlighter.computeAddedLineRanges(diff, 10)
 
         assertEquals(listOf(11..11), ranges)
+    }
+
+    @Test
+    fun `content equality - same bytes match`() {
+        assertTrue(byteArrayOf(1, 2, 3).contentEquals(byteArrayOf(1, 2, 3)))
+    }
+
+    @Test
+    fun `content equality - different bytes don't match`() {
+        assertFalse(byteArrayOf(1, 2, 3).contentEquals(byteArrayOf(1, 2, 4)))
+    }
+
+    @Test
+    fun `content equality - empty arrays match each other`() {
+        assertTrue(byteArrayOf().contentEquals(byteArrayOf()))
+    }
+
+    @Test
+    fun `chooseEditor - no working tree file picks LightVirtual`() {
+        val head = byteArrayOf(1, 2, 3)
+        val choice = EditorHighlighter.chooseEditor(null, null, head, "abc1234")
+
+        assertTrue(choice is EditorHighlighter.EditorChoice.LightVirtual)
+        choice as EditorHighlighter.EditorChoice.LightVirtual
+        assertSame(head, choice.content)
+        assertEquals("abc1234", choice.ref)
+    }
+
+    @Test
+    fun `chooseEditor - working tree with matching content picks WorkingTree`() {
+        val file = LightVirtualFile("a.kt")
+        val bytes = byteArrayOf(1, 2, 3)
+        val choice = EditorHighlighter.chooseEditor(file, bytes, byteArrayOf(1, 2, 3), "abc1234")
+
+        assertTrue(choice is EditorHighlighter.EditorChoice.WorkingTree)
+        choice as EditorHighlighter.EditorChoice.WorkingTree
+        assertSame(file, choice.file)
+    }
+
+    @Test
+    fun `chooseEditor - working tree with different content picks LightVirtual`() {
+        val file = LightVirtualFile("a.kt")
+        val choice = EditorHighlighter.chooseEditor(
+            file,
+            byteArrayOf(1, 2, 3),
+            byteArrayOf(9, 9, 9),
+            "abc1234",
+        )
+
+        assertTrue(choice is EditorHighlighter.EditorChoice.LightVirtual)
+    }
+
+    @Test
+    fun `chooseEditor - working tree empty with non-empty head picks LightVirtual`() {
+        val file = LightVirtualFile("a.kt")
+        val head = byteArrayOf(1, 2, 3)
+        val choice = EditorHighlighter.chooseEditor(file, byteArrayOf(), head, "abc1234")
+
+        assertTrue(choice is EditorHighlighter.EditorChoice.LightVirtual)
+    }
+
+    @Test
+    fun `chooseEditor - both empty picks WorkingTree`() {
+        val file = LightVirtualFile("a.kt")
+        val choice = EditorHighlighter.chooseEditor(file, byteArrayOf(), byteArrayOf(), "abc1234")
+
+        assertTrue(choice is EditorHighlighter.EditorChoice.WorkingTree)
     }
 }

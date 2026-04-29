@@ -229,6 +229,43 @@ path elsewhere in the plugin — host parsing lives in one place.
 
 ---
 
+## Review session file display
+
+Review session highlights are applied against the PR's head-ref content,
+not the working-tree copy. The plugin fetches file content via the
+backend's `FetchFileAtRef` RPC, which wraps the same forge handler used
+by session opening.
+
+Resolution order:
+
+1. Fetch the head-ref content (cached per session, keyed by path+ref)
+2. If the working-tree copy exists and is byte-equal, open the real
+   `VirtualFile` — preserves IDE features like Find Usages and run
+   configurations
+3. Otherwise open a read-only `LightVirtualFile` named
+   `<filename> @ <short-ref>` showing the head-ref content
+
+This matches the diff's line numbers to the displayed content
+unconditionally. Working-tree drift no longer produces silent
+misalignment.
+
+Fetch failures fall back to the working-tree copy with a user-visible
+status message; the user is never silently shown the wrong content.
+`NOT_FOUND` from the backend is treated as "file genuinely doesn't
+exist at the head ref" — no fallback, the highlight is cleared and
+the user is notified.
+
+`EditorHighlighter` owns its own `CoroutineScope` (IO dispatcher,
+`SupervisorJob`) and is registered via `Disposer.register(parent, child)`
+from `SessionPanel`. The scope is cancelled and the per-session content
+cache cleared on dispose. `SessionPanel.bind` calls `highlighter.bind`
+with the active session's `ForgeContext` so the highlighter can resolve
+`(host, owner, repo, headRef)` for `FetchFileAtRef` calls. Without a
+bound context the highlighter logs and returns — it never falls back to
+opening the working-tree copy unconditionally.
+
+---
+
 ## Future direction
 
 - **Walkthrough sessions** — explain a file in the open project step by step

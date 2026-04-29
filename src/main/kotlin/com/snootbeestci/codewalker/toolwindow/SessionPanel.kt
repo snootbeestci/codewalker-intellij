@@ -3,8 +3,10 @@ package com.snootbeestci.codewalker.toolwindow
 import codewalker.v1.Codewalker.EdgeLabel
 import codewalker.v1.Codewalker.Step
 import codewalker.v1.Codewalker.StepComplete
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Disposer
 import com.intellij.ui.components.JBScrollPane
 import com.snootbeestci.codewalker.editor.EditorHighlighter
 import com.snootbeestci.codewalker.session.NavigationController
@@ -27,12 +29,17 @@ import javax.swing.JTextPane
 import javax.swing.ListSelectionModel
 import javax.swing.SwingConstants
 
-class SessionPanel(private val project: Project) {
+class SessionPanel(
+    private val project: Project,
+    private val onStatusMessage: (String) -> Unit = {},
+) : Disposable {
 
     val root: JPanel = JPanel(GridBagLayout())
 
     private val log = Logger.getInstance(SessionPanel::class.java)
-    private val highlighter = EditorHighlighter(project)
+    private val highlighter = EditorHighlighter(project, onStatusMessage).also {
+        Disposer.register(this, it)
+    }
 
     private val titleLabel = JLabel("Codewalker")
     private val languageLabel = JLabel(" ")
@@ -153,6 +160,7 @@ class SessionPanel(private val project: Project) {
         this.controller = controller
         this.navigationController?.dispose()
         this.navigationController = NavigationController(controller, this)
+        highlighter.bind(controller.forgeContext)
         updateLanguageBadge(controller)
         updateLevelPips(controller.effectiveLevel)
         populateStepList(controller.steps)
@@ -165,10 +173,9 @@ class SessionPanel(private val project: Project) {
         controller.currentStepId?.let { navigationController?.navigateTo(it) }
     }
 
-    fun dispose() {
+    override fun dispose() {
         navigationController?.dispose()
         navigationController = null
-        highlighter.dispose()
     }
 
     fun clearNarration() {

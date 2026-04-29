@@ -17,7 +17,7 @@ class CodewalkerPanel(project: Project) : Disposable {
     private val disconnectedPanel = DisconnectedPanel()
     internal val idlePanel = IdlePanel(project)
     internal val loadingPanel = LoadingPanel()
-    private val sessionPanel = SessionPanel(project)
+    private val sessionPanel = SessionPanel(project, onStatusMessage = ::showError)
     private val controller = ReviewSessionController(this)
 
     init {
@@ -27,6 +27,7 @@ class CodewalkerPanel(project: Project) : Disposable {
         root.add(sessionPanel.root, "SESSION")
 
         Disposer.register(this, idlePanel)
+        Disposer.register(this, sessionPanel)
 
         project.messageBus.connect(project).subscribe(
             CodewalkerClient.CONNECTION_STATE_TOPIC,
@@ -68,7 +69,6 @@ class CodewalkerPanel(project: Project) : Disposable {
 
     override fun dispose() {
         controller.dispose()
-        sessionPanel.dispose()
         disconnectedPanel.dispose()
     }
 }

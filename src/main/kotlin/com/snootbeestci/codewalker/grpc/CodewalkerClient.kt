@@ -2,6 +2,7 @@ package com.snootbeestci.codewalker.grpc
 
 import codewalker.v1.CodeWalkerGrpcKt
 import codewalker.v1.Codewalker.ListPullRequestsResponse
+import codewalker.v1.fetchFileAtRefRequest
 import codewalker.v1.getVersionRequest
 import codewalker.v1.listPullRequestsRequest
 import com.intellij.openapi.Disposable
@@ -69,6 +70,26 @@ class CodewalkerClient : Disposable {
             this.repo = repo
             this.forgeToken = forgeToken
         })
+    }
+
+    suspend fun fetchFileAtRef(
+        host: String,
+        owner: String,
+        repo: String,
+        path: String,
+        ref: String,
+        forgeToken: String,
+    ): ByteArray {
+        val s = stub ?: error("Not connected to backend")
+        val response = s.fetchFileAtRef(fetchFileAtRefRequest {
+            this.host = host
+            this.owner = owner
+            this.repo = repo
+            this.path = path
+            this.ref = ref
+            this.forgeToken = forgeToken
+        })
+        return response.content.toByteArray()
     }
 
     override fun dispose() { disconnect() }
