@@ -18,9 +18,11 @@ object ReviewErrorFormatter {
 
     private val ssoMarkers = listOf(
         "SAML enforcement",
-        "SSO",
+        "SSO authorization",
+        "SSO authorisation",
         "single sign-on",
         "must have admin rights",
+        "configure SSO",
     )
 
     fun format(e: Throwable): String {

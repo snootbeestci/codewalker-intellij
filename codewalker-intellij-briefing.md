@@ -167,11 +167,16 @@ fields, so the keying matches what the server expects on the wire.
 
 `ReviewErrorFormatter.format` converts gRPC errors into user-facing strings.
 For `PERMISSION_DENIED`, the server includes the forge's response body in
-the status description (truncated to ~500 chars). When that body contains
-SSO markers (`SAML enforcement`, `single sign-on`, `must have admin
-rights`, `SSO`), the formatter prepends `Authorization required:` so the
-user knows the token is valid but needs SSO authorisation rather than
-replacement.
+the status description (truncated to ~500 chars).
+
+When the body contains specific SSO markers — `SAML enforcement`,
+`SSO authorization` (or `authorisation`), `single sign-on`, `must have
+admin rights`, `configure SSO` — the formatter prepends `Authorization
+required:` so the user knows the token is valid but needs SSO
+authorisation rather than replacement. The markers are phrase-level,
+not bare acronyms, to avoid false positives against bodies that
+mention `associated`, `cross-origin`, or other words containing the
+letters `sso`.
 
 ---
 

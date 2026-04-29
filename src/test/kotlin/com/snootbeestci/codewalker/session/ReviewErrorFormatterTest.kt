@@ -39,6 +39,28 @@ class ReviewErrorFormatterTest {
     }
 
     @Test
+    fun `permission denied with associated branch description is not tagged`() {
+        val e = permissionDenied("This PR is associated with a protected branch")
+        val msg = ReviewErrorFormatter.format(e)
+        assertEquals(false, msg.startsWith("Authorization required:"))
+    }
+
+    @Test
+    fun `permission denied with crossorigin description is not tagged`() {
+        val e = permissionDenied("Cross-origin requests are not permitted on this endpoint")
+        val msg = ReviewErrorFormatter.format(e)
+        assertEquals(false, msg.startsWith("Authorization required:"))
+    }
+
+    @Test
+    fun `permission denied with bare SSO acronym alone is not tagged`() {
+        val e = permissionDenied("SSO is not the issue here")
+        val msg = ReviewErrorFormatter.format(e)
+        // After tightening, bare "SSO" alone no longer triggers the prefix.
+        assertEquals(false, msg.startsWith("Authorization required:"))
+    }
+
+    @Test
     fun `permission denied with SAML enforcement body is tagged as authorization required`() {
         val body = "Resource protected by organization SAML enforcement. " +
             "You must grant your OAuth token access to this organization."
