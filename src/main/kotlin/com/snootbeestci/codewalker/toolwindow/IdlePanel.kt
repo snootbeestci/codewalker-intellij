@@ -156,9 +156,8 @@ class IdlePanel(private val project: Project) : Disposable {
         subtitleLabel.text = "Reviewing PRs for ${info.owner}/${info.repo}"
         showStatus("Loading pull requests…")
 
-        val token = TokenStore.getInstance().get(info.host) ?: ""
-
         scope.launch {
+            val token = TokenStore.getInstance().get(info.host) ?: ""
             try {
                 val response = CodewalkerClient.getInstance().listPullRequests(
                     host = info.host,
