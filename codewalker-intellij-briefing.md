@@ -177,18 +177,22 @@ they do not silently downgrade to unauthenticated mode.
 
 ### 403 / SSO error rendering
 
-`ReviewErrorFormatter.format` converts gRPC errors into user-facing strings.
-For `PERMISSION_DENIED`, the server includes the forge's response body in
-the status description (truncated to ~500 chars).
+`ReviewErrorFormatter.format` converts a server-side error into a
+`FormattedError(message, isAuthFailure)`. Callers use `isAuthFailure`
+directly to decide whether to surface a "Configure tokens" affordance,
+rather than string-matching the message. SSO-marked 403 responses still
+get the `Authorization required:` prefix on the message; the marker
+phrases are listed in the formatter source.
 
-When the body contains specific SSO markers — `SAML enforcement`,
-`SSO authorization` (or `authorisation`), `single sign-on`, `must have
-admin rights`, `configure SSO` — the formatter prepends `Authorization
-required:` so the user knows the token is valid but needs SSO
-authorisation rather than replacement. The markers are phrase-level,
-not bare acronyms, to avoid false positives against bodies that
-mention `associated`, `cross-origin`, or other words containing the
-letters `sso`.
+For `PERMISSION_DENIED`, the server includes the forge's response body in
+the status description (truncated to ~500 chars). When the body contains
+specific SSO markers — `SAML enforcement`, `SSO authorization` (or
+`authorisation`), `single sign-on`, `must have admin rights`,
+`configure SSO` — the formatter prepends `Authorization required:` so
+the user knows the token is valid but needs SSO authorisation rather
+than replacement. The markers are phrase-level, not bare acronyms, to
+avoid false positives against bodies that mention `associated`,
+`cross-origin`, or other words containing the letters `sso`.
 
 ---
 
@@ -215,6 +219,13 @@ until the corresponding ForgeHandler exists on the backend.
 
 The plugin declares a `Git4Idea` dependency in `plugin.xml` so the
 JetBrains Git integration is available at runtime in any host IDE.
+
+URL parsing for git remotes is centralised in
+`GitHubRemoteResolver.parseRemoteUrlResult`, which returns a sealed
+`RemoteParseResult` distinguishing `Ok`, `NonGitHub(host)`,
+`Unparseable`, and `Empty`. The idle panel uses this to render distinct
+messages for each failure mode. There is no separate host-extraction
+path elsewhere in the plugin — host parsing lives in one place.
 
 ---
 
@@ -246,6 +257,11 @@ JetBrains Git integration is available at runtime in any host IDE.
   require a read action — wrap them in `ReadAction.compute { ... }` when
   called from the EDT or a coroutine, otherwise IntelliJ throws
   "Read access is allowed from inside read-action only".
+- UI panels that own a `CoroutineScope` must implement `Disposable` and
+  cancel the scope in `dispose()`. Owning containers register children
+  via `Disposer.register(parent, child)` so cancellation cascades
+  automatically — manual `child.dispose()` calls in a parent's
+  `dispose()` are a code smell.
 
 ### Build
 - `./gradlew runIde` — launches a sandboxed IDE with the plugin installed

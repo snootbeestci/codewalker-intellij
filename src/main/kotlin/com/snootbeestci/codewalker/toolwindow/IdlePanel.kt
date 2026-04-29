@@ -1,6 +1,7 @@
 package com.snootbeestci.codewalker.toolwindow
 
 import codewalker.v1.Codewalker.PullRequestSummary
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
 import com.intellij.ui.JBColor
@@ -10,11 +11,12 @@ import com.intellij.util.ui.JBUI
 import com.snootbeestci.codewalker.forge.TokenStore
 import com.snootbeestci.codewalker.git.GitHubRemoteResolver
 import com.snootbeestci.codewalker.git.ProjectRepoInfo
+import com.snootbeestci.codewalker.git.RemoteParseResult
 import com.snootbeestci.codewalker.grpc.CodewalkerClient
+import com.snootbeestci.codewalker.session.FormattedError
 import com.snootbeestci.codewalker.session.ReviewErrorFormatter
 import com.snootbeestci.codewalker.settings.CodewalkerSettings
 import com.snootbeestci.codewalker.settings.CodewalkerSettingsConfigurable
-import git4idea.repo.GitRepositoryManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +34,7 @@ import javax.swing.JComboBox
 import javax.swing.JPanel
 import javax.swing.SwingConstants
 
-class IdlePanel(private val project: Project) {
+class IdlePanel(private val project: Project) : Disposable {
 
     val root: JPanel = JPanel(BorderLayout())
 
@@ -123,7 +125,7 @@ class IdlePanel(private val project: Project) {
         errorLabel.isVisible = false
     }
 
-    fun dispose() {
+    override fun dispose() {
         scope.cancel()
     }
 
@@ -132,17 +134,23 @@ class IdlePanel(private val project: Project) {
         clearList()
         errorActions.isVisible = false
 
-        if (!hasGitRemote()) {
-            subtitleLabel.text = ""
-            showStatus("This project has no git remote configured. Configure VCS settings and try again.")
-            return
-        }
-
-        val info = GitHubRemoteResolver.resolve(project)
-        if (info == null) {
-            subtitleLabel.text = ""
-            showStatus(unsupportedRemoteMessage())
-            return
+        val info = when (val r = GitHubRemoteResolver.resolveResult(project)) {
+            is RemoteParseResult.Empty -> {
+                subtitleLabel.text = ""
+                showStatus("This project has no git remote configured. Configure VCS settings and try again.")
+                return
+            }
+            is RemoteParseResult.Unparseable -> {
+                subtitleLabel.text = ""
+                showStatus("Could not parse the project's `origin` remote URL.")
+                return
+            }
+            is RemoteParseResult.NonGitHub -> {
+                subtitleLabel.text = ""
+                showStatus("Codewalker currently supports GitHub repositories only. The current project's `origin` remote points to ${r.host}.")
+                return
+            }
+            is RemoteParseResult.Ok -> r.info
         }
 
         subtitleLabel.text = "Reviewing PRs for ${info.owner}/${info.repo}"
@@ -162,51 +170,10 @@ class IdlePanel(private val project: Project) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                val msg = ReviewErrorFormatter.format(e)
-                withContext(Dispatchers.Main) { renderFetchError(msg) }
+                val formatted = ReviewErrorFormatter.format(e)
+                withContext(Dispatchers.Main) { renderFetchError(formatted) }
             }
         }
-    }
-
-    private fun hasGitRemote(): Boolean {
-        val repos = GitRepositoryManager.getInstance(project).repositories
-        return repos.any { it.remotes.isNotEmpty() }
-    }
-
-    private fun unsupportedRemoteMessage(): String {
-        val repos = GitRepositoryManager.getInstance(project).repositories
-        val origin = repos.firstNotNullOfOrNull { repo ->
-            repo.remotes.firstOrNull { it.name == "origin" }
-        } ?: return "This project has no `origin` remote configured. Configure VCS settings and try again."
-
-        val url = origin.firstUrl
-            ?: return "The `origin` remote has no URL. Configure VCS settings and try again."
-
-        // Try parsing as github first to give a more specific error
-        val parsed = GitHubRemoteResolver.parseRemoteUrl(url)
-        if (parsed == null) {
-            // Either non-GitHub host or unparseable
-            val host = extractHost(url)
-            return if (host != null) {
-                "Codewalker currently supports GitHub repositories only. The current project's `origin` remote points to $host."
-            } else {
-                "Could not parse the project's `origin` remote URL: $url."
-            }
-        }
-        return "Codewalker currently supports GitHub repositories only."
-    }
-
-    private fun extractHost(url: String): String? {
-        val cleaned = url.trim().removeSuffix("/").let {
-            if (it.endsWith(".git")) it.removeSuffix(".git") else it
-        }
-        Regex("""(?:ssh://)?git@([^:/]+)[:/].*""").matchEntire(cleaned)?.let {
-            return it.groupValues[1]
-        }
-        Regex("""https?://([^/]+)/.*""").matchEntire(cleaned)?.let {
-            return it.groupValues[1]
-        }
-        return null
     }
 
     private fun renderPRs(info: ProjectRepoInfo, prs: List<PullRequestSummary>) {
@@ -229,15 +196,12 @@ class IdlePanel(private val project: Project) {
         listContainer.repaint()
     }
 
-    private fun renderFetchError(message: String) {
+    private fun renderFetchError(formatted: FormattedError) {
         clearList()
         showStatus("")
-        showError("Couldn't load pull requests: $message")
+        showError("Couldn't load pull requests: ${formatted.message}")
         errorActions.removeAll()
-        if (message.startsWith("Authorization required:") ||
-            message.contains("PERMISSION_DENIED", ignoreCase = true) ||
-            message.contains("UNAUTHENTICATED", ignoreCase = true)
-        ) {
+        if (formatted.isAuthFailure) {
             errorActions.add(configureTokensButton)
         }
         errorActions.add(retryButton)

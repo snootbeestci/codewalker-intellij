@@ -101,8 +101,8 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                val msg = ReviewErrorFormatter.format(e)
-                withContext(Dispatchers.Main) { panel.showError(msg) }
+                val formatted = ReviewErrorFormatter.format(e)
+                withContext(Dispatchers.Main) { panel.showError(formatted.message) }
             }
         }
     }

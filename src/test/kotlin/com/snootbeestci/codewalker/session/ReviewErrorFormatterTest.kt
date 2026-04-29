@@ -16,71 +16,81 @@ class ReviewErrorFormatterTest {
 
     @Test
     fun `non-status exception falls through to message`() {
-        val msg = ReviewErrorFormatter.format(IllegalStateException("boom"))
-        assertEquals("boom", msg)
+        val r = ReviewErrorFormatter.format(IllegalStateException("boom"))
+        assertEquals("boom", r.message)
+        assertEquals(false, r.isAuthFailure)
     }
 
     @Test
     fun `null message yields fallback string`() {
-        val msg = ReviewErrorFormatter.format(RuntimeException())
-        assertEquals("Unknown error", msg)
+        val r = ReviewErrorFormatter.format(RuntimeException())
+        assertEquals("Unknown error", r.message)
+        assertEquals(false, r.isAuthFailure)
     }
 
     @Test
     fun `permission denied without description yields generic string`() {
         val e = StatusRuntimeException(Status.PERMISSION_DENIED, Metadata())
-        assertEquals("Permission denied", ReviewErrorFormatter.format(e))
+        val r = ReviewErrorFormatter.format(e)
+        assertEquals("Permission denied", r.message)
+        assertEquals(true, r.isAuthFailure)
     }
 
     @Test
     fun `permission denied with plain bad-token body returns the body`() {
-        val e = permissionDenied("Bad credentials")
-        assertEquals("Bad credentials", ReviewErrorFormatter.format(e))
+        val r = ReviewErrorFormatter.format(permissionDenied("Bad credentials"))
+        assertEquals("Bad credentials", r.message)
+        assertEquals(true, r.isAuthFailure)
     }
 
     @Test
     fun `permission denied with associated branch description is not tagged`() {
-        val e = permissionDenied("This PR is associated with a protected branch")
-        val msg = ReviewErrorFormatter.format(e)
-        assertEquals(false, msg.startsWith("Authorization required:"))
+        val r = ReviewErrorFormatter.format(
+            permissionDenied("This PR is associated with a protected branch")
+        )
+        assertEquals(false, r.message.startsWith("Authorization required:"))
+        assertEquals(true, r.isAuthFailure)
     }
 
     @Test
     fun `permission denied with crossorigin description is not tagged`() {
-        val e = permissionDenied("Cross-origin requests are not permitted on this endpoint")
-        val msg = ReviewErrorFormatter.format(e)
-        assertEquals(false, msg.startsWith("Authorization required:"))
+        val r = ReviewErrorFormatter.format(
+            permissionDenied("Cross-origin requests are not permitted on this endpoint")
+        )
+        assertEquals(false, r.message.startsWith("Authorization required:"))
+        assertEquals(true, r.isAuthFailure)
     }
 
     @Test
     fun `permission denied with bare SSO acronym alone is not tagged`() {
-        val e = permissionDenied("SSO is not the issue here")
-        val msg = ReviewErrorFormatter.format(e)
-        // After tightening, bare "SSO" alone no longer triggers the prefix.
-        assertEquals(false, msg.startsWith("Authorization required:"))
+        val r = ReviewErrorFormatter.format(permissionDenied("SSO is not the issue here"))
+        assertEquals(false, r.message.startsWith("Authorization required:"))
+        assertEquals(true, r.isAuthFailure)
     }
 
     @Test
     fun `permission denied with SAML enforcement body is tagged as authorization required`() {
         val body = "Resource protected by organization SAML enforcement. " +
             "You must grant your OAuth token access to this organization."
-        val e = permissionDenied(body)
-        val msg = ReviewErrorFormatter.format(e)
-        assertEquals("Authorization required: $body", msg)
+        val r = ReviewErrorFormatter.format(permissionDenied(body))
+        assertEquals("Authorization required: $body", r.message)
+        assertEquals(true, r.isAuthFailure)
     }
 
     @Test
     fun `permission denied with single sign-on marker is tagged as authorization required`() {
-        val e = permissionDenied("Single sign-on required for org foo")
-        val msg = ReviewErrorFormatter.format(e)
-        assertEquals(true, msg.startsWith("Authorization required:"))
+        val r = ReviewErrorFormatter.format(permissionDenied("Single sign-on required for org foo"))
+        assertEquals(true, r.message.startsWith("Authorization required:"))
+        assertEquals(true, r.isAuthFailure)
     }
 
     @Test
     fun `permission denied with admin rights marker is tagged as authorization required`() {
-        val e = permissionDenied("Token must have admin rights to access this org")
-        val msg = ReviewErrorFormatter.format(e)
-        assertEquals(true, msg.startsWith("Authorization required:"))
+        val r = ReviewErrorFormatter.format(
+            permissionDenied("Token must have admin rights to access this org")
+        )
+        assertEquals(true, r.message.startsWith("Authorization required:"))
+        assertEquals(true, r.isAuthFailure)
     }
 
     @Test
@@ -89,9 +99,36 @@ class ReviewErrorFormatterTest {
             Status.NOT_FOUND.withDescription("no such PR"),
             Metadata()
         )
-        val msg = ReviewErrorFormatter.format(e)
-        // StatusRuntimeException.message is "NOT_FOUND: no such PR" — we don't
-        // dictate the format here, just confirm the path is the default.
-        assertEquals(true, msg.contains("no such PR"))
+        val r = ReviewErrorFormatter.format(e)
+        assertEquals(true, r.message.contains("no such PR"))
+    }
+
+    @Test
+    fun `unauthenticated status is auth failure`() {
+        val e = StatusRuntimeException(
+            Status.UNAUTHENTICATED.withDescription("token expired"),
+            Metadata(),
+        )
+        val r = ReviewErrorFormatter.format(e)
+        assertEquals("token expired", r.message)
+        assertEquals(true, r.isAuthFailure)
+    }
+
+    @Test
+    fun `unauthenticated without description has fallback message`() {
+        val e = StatusRuntimeException(Status.UNAUTHENTICATED, Metadata())
+        val r = ReviewErrorFormatter.format(e)
+        assertEquals("Authentication required", r.message)
+        assertEquals(true, r.isAuthFailure)
+    }
+
+    @Test
+    fun `not-found status is not an auth failure`() {
+        val e = StatusRuntimeException(
+            Status.NOT_FOUND.withDescription("no such PR"),
+            Metadata(),
+        )
+        val r = ReviewErrorFormatter.format(e)
+        assertEquals(false, r.isAuthFailure)
     }
 }

@@ -1,14 +1,16 @@
 package com.snootbeestci.codewalker.toolwindow
 
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Disposer
 import com.snootbeestci.codewalker.grpc.CodewalkerClient
 import com.snootbeestci.codewalker.grpc.ConnectionStateListener
 import com.snootbeestci.codewalker.session.ReviewSessionController
 import java.awt.CardLayout
 import javax.swing.JPanel
 
-class CodewalkerPanel(project: Project) {
+class CodewalkerPanel(project: Project) : Disposable {
 
     val root: JPanel = JPanel(CardLayout())
 
@@ -23,6 +25,8 @@ class CodewalkerPanel(project: Project) {
         root.add(idlePanel.root, "IDLE")
         root.add(loadingPanel.root, "LOADING")
         root.add(sessionPanel.root, "SESSION")
+
+        Disposer.register(this, idlePanel)
 
         project.messageBus.connect(project).subscribe(
             CodewalkerClient.CONNECTION_STATE_TOPIC,
@@ -62,10 +66,9 @@ class CodewalkerPanel(project: Project) {
         (root.layout as CardLayout).show(root, "IDLE")
     }
 
-    fun dispose() {
+    override fun dispose() {
         controller.dispose()
         sessionPanel.dispose()
         disconnectedPanel.dispose()
-        idlePanel.dispose()
     }
 }
