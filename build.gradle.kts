@@ -37,6 +37,7 @@ dependencies {
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     intellijPlatform {
         create(providers.gradleProperty("platformType").get(), providers.gradleProperty("platformVersion").get())
+        bundledPlugin("Git4Idea")
         pluginVerifier()
         zipSigner()
         testFramework(TestFrameworkType.Platform)
