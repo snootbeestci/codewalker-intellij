@@ -228,7 +228,7 @@ class EditorHighlighter(
             isWritable = false
         }
         val descriptor = OpenFileDescriptor(project, virtualFile)
-        return FileEditorManager.getInstance(project).openTextEditor(descriptor, true)
+        return FileEditorManager.getInstance(project).openTextEditor(descriptor, false)
     }
 
     override fun dispose() {
