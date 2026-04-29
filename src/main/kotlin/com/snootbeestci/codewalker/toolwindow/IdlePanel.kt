@@ -1,69 +1,118 @@
 package com.snootbeestci.codewalker.toolwindow
 
+import codewalker.v1.Codewalker.PullRequestSummary
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.options.ShowSettingsUtil
+import com.intellij.openapi.project.Project
 import com.intellij.ui.JBColor
-import com.intellij.ui.components.JBTextField
+import com.intellij.ui.components.JBLabel
+import com.intellij.ui.components.JBScrollPane
+import com.intellij.util.ui.JBUI
+import com.snootbeestci.codewalker.forge.TokenStore
+import com.snootbeestci.codewalker.git.GitHubRemoteResolver
+import com.snootbeestci.codewalker.git.ProjectRepoInfo
+import com.snootbeestci.codewalker.git.RemoteParseResult
+import com.snootbeestci.codewalker.grpc.CodewalkerClient
+import com.snootbeestci.codewalker.session.FormattedError
+import com.snootbeestci.codewalker.session.ReviewErrorFormatter
 import com.snootbeestci.codewalker.settings.CodewalkerSettings
-import java.awt.GridBagConstraints
-import java.awt.GridBagLayout
-import java.awt.Insets
+import com.snootbeestci.codewalker.settings.CodewalkerSettingsConfigurable
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.awt.BorderLayout
+import java.awt.Component
+import java.awt.Dimension
+import java.awt.FlowLayout
+import javax.swing.BoxLayout
 import javax.swing.JButton
 import javax.swing.JComboBox
-import javax.swing.JLabel
 import javax.swing.JPanel
-import javax.swing.event.DocumentEvent
-import javax.swing.event.DocumentListener
+import javax.swing.SwingConstants
 
-class IdlePanel {
+class IdlePanel(private val project: Project) : Disposable {
 
-    val root: JPanel = JPanel(GridBagLayout())
-    private val urlField = JBTextField()
+    val root: JPanel = JPanel(BorderLayout())
+
     private val experienceLevelCombo = JComboBox(arrayOf("Junior", "Mid", "Senior"))
-    private val openReviewButton = JButton("Open Review")
-    private val errorLabel = JLabel("").apply {
+    private val refreshButton = JButton("Refresh")
+    private val subtitleLabel = JBLabel("").apply {
+        border = JBUI.Borders.empty(8, 12)
+    }
+    private val statusLabel = JBLabel("", SwingConstants.CENTER).apply {
+        border = JBUI.Borders.empty(16, 12)
+    }
+    private val errorLabel = JBLabel("").apply {
         foreground = JBColor.RED
+        border = JBUI.Borders.empty(4, 12)
         isVisible = false
     }
+    private val listContainer = JPanel().apply {
+        layout = BoxLayout(this, BoxLayout.Y_AXIS)
+    }
+    private val listScroll = JBScrollPane(listContainer).apply {
+        border = null
+    }
+    private val errorActions = JPanel(FlowLayout(FlowLayout.LEFT, 8, 4)).apply {
+        isVisible = false
+    }
+    private val configureTokensButton = JButton("Configure tokens").apply {
+        addActionListener {
+            ShowSettingsUtil.getInstance().showSettingsDialog(
+                project,
+                CodewalkerSettingsConfigurable::class.java,
+            )
+        }
+    }
+    private val retryButton = JButton("Retry").apply {
+        addActionListener { refreshPullRequests() }
+    }
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var prClickHandler: ((PullRequestSummary) -> Unit)? = null
 
     init {
         val settings = CodewalkerSettings.getInstance()
         experienceLevelCombo.selectedItem = displayLabel(settings.state.experienceLevel)
 
-        openReviewButton.isEnabled = false
-        urlField.emptyText.text = "Paste a GitHub PR, commit, or comparison URL"
-        urlField.document.addDocumentListener(object : DocumentListener {
-            override fun insertUpdate(e: DocumentEvent) = updateButton()
-            override fun removeUpdate(e: DocumentEvent) = updateButton()
-            override fun changedUpdate(e: DocumentEvent) = updateButton()
-            private fun updateButton() {
-                openReviewButton.isEnabled = urlField.text.isNotEmpty()
+        refreshButton.addActionListener { refreshPullRequests() }
+
+        val header = JPanel(BorderLayout()).apply {
+            border = JBUI.Borders.empty(8, 12, 0, 12)
+            add(JBLabel("Codewalker"), BorderLayout.WEST)
+            add(refreshButton, BorderLayout.EAST)
+        }
+
+        val centre = JPanel(BorderLayout()).apply {
+            add(subtitleLabel, BorderLayout.NORTH)
+            add(listScroll, BorderLayout.CENTER)
+            val statusWrapper = JPanel(BorderLayout()).apply {
+                add(statusLabel, BorderLayout.NORTH)
+                add(errorLabel, BorderLayout.CENTER)
+                add(errorActions, BorderLayout.SOUTH)
             }
-        })
+            add(statusWrapper, BorderLayout.SOUTH)
+        }
 
-        fun gbc(row: Int, fill: Int = GridBagConstraints.NONE, weightx: Double = 0.0) =
-            GridBagConstraints().apply {
-                gridx = 0; gridy = row
-                this.fill = fill
-                this.weightx = weightx
-                insets = Insets(4, 8, 4, 8)
-                anchor = GridBagConstraints.CENTER
-            }
+        val footer = JPanel(FlowLayout(FlowLayout.LEFT, 8, 8)).apply {
+            border = JBUI.Borders.customLineTop(JBColor.border())
+            add(JBLabel("Experience level:"))
+            add(experienceLevelCombo)
+        }
 
-        root.add(JLabel("Codewalker"), gbc(0))
-        root.add(urlField, gbc(1, GridBagConstraints.HORIZONTAL, 1.0))
-        root.add(experienceLevelCombo, gbc(2, GridBagConstraints.HORIZONTAL, 1.0))
-        root.add(openReviewButton, gbc(3))
-        root.add(errorLabel, gbc(4, GridBagConstraints.HORIZONTAL, 1.0))
-
-        root.add(JPanel(), GridBagConstraints().apply {
-            gridy = 5; weighty = 1.0; fill = GridBagConstraints.VERTICAL
-        })
+        root.add(header, BorderLayout.NORTH)
+        root.add(centre, BorderLayout.CENTER)
+        root.add(footer, BorderLayout.SOUTH)
     }
 
-    fun getUrl(): String = urlField.text
     fun getExperienceLevel(): String = selectedExperienceLevel()
 
-    fun setOpenReviewAction(action: () -> Unit) {
-        openReviewButton.addActionListener { action() }
+    fun setPullRequestClickHandler(handler: (PullRequestSummary) -> Unit) {
+        prClickHandler = handler
     }
 
     fun showError(message: String) {
@@ -74,6 +123,102 @@ class IdlePanel {
     fun clearError() {
         errorLabel.text = ""
         errorLabel.isVisible = false
+    }
+
+    override fun dispose() {
+        scope.cancel()
+    }
+
+    fun refreshPullRequests() {
+        clearError()
+        clearList()
+        errorActions.isVisible = false
+
+        val info = when (val r = GitHubRemoteResolver.resolveResult(project)) {
+            is RemoteParseResult.Empty -> {
+                subtitleLabel.text = ""
+                showStatus("This project has no git remote configured. Configure VCS settings and try again.")
+                return
+            }
+            is RemoteParseResult.Unparseable -> {
+                subtitleLabel.text = ""
+                showStatus("Could not parse the project's `origin` remote URL.")
+                return
+            }
+            is RemoteParseResult.NonGitHub -> {
+                subtitleLabel.text = ""
+                showStatus("Codewalker currently supports GitHub repositories only. The current project's `origin` remote points to ${r.host}.")
+                return
+            }
+            is RemoteParseResult.Ok -> r.info
+        }
+
+        subtitleLabel.text = "Reviewing PRs for ${info.owner}/${info.repo}"
+        showStatus("Loading pull requests…")
+
+        val token = TokenStore.getInstance().get(info.host) ?: ""
+
+        scope.launch {
+            try {
+                val response = CodewalkerClient.getInstance().listPullRequests(
+                    host = info.host,
+                    owner = info.owner,
+                    repo = info.repo,
+                    forgeToken = token,
+                )
+                withContext(Dispatchers.Main) { renderPRs(info, response.pullRequestsList) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val formatted = ReviewErrorFormatter.format(e)
+                withContext(Dispatchers.Main) { renderFetchError(formatted) }
+            }
+        }
+    }
+
+    private fun renderPRs(info: ProjectRepoInfo, prs: List<PullRequestSummary>) {
+        clearList()
+        if (prs.isEmpty()) {
+            showStatus("No open pull requests for ${info.owner}/${info.repo}.")
+            return
+        }
+        statusLabel.text = ""
+        statusLabel.isVisible = false
+        for (pr in prs) {
+            val item = PullRequestListItem(pr) { selected ->
+                prClickHandler?.invoke(selected)
+            }
+            item.root.alignmentX = Component.LEFT_ALIGNMENT
+            item.root.maximumSize = Dimension(Int.MAX_VALUE, item.root.preferredSize.height)
+            listContainer.add(item.root)
+        }
+        listContainer.revalidate()
+        listContainer.repaint()
+    }
+
+    private fun renderFetchError(formatted: FormattedError) {
+        clearList()
+        showStatus("")
+        showError("Couldn't load pull requests: ${formatted.message}")
+        errorActions.removeAll()
+        if (formatted.isAuthFailure) {
+            errorActions.add(configureTokensButton)
+        }
+        errorActions.add(retryButton)
+        errorActions.isVisible = true
+        errorActions.revalidate()
+        errorActions.repaint()
+    }
+
+    private fun showStatus(text: String) {
+        statusLabel.text = text
+        statusLabel.isVisible = text.isNotEmpty()
+    }
+
+    private fun clearList() {
+        listContainer.removeAll()
+        listContainer.revalidate()
+        listContainer.repaint()
     }
 
     private fun selectedExperienceLevel(): String = when (experienceLevelCombo.selectedItem) {

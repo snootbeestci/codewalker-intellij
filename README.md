@@ -42,8 +42,13 @@ repositories work without a token.
 
 **4. Review a PR**
 
-Open the Codewalker tool window (right side panel), paste a GitHub PR URL,
-and click Open Review.
+Open the Codewalker tool window (right side panel). The plugin lists the
+open pull requests for the current project's GitHub remote — click any
+row to start a review session. If the current project's remote is on a
+host you have signed into via Settings → Tools → Codewalker, the token
+is sent automatically; otherwise public-repo mode is used.
+
+Use the refresh button to refetch the PR list.
 
 ## Development
 

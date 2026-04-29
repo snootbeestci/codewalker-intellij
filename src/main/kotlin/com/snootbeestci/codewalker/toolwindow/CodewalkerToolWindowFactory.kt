@@ -11,7 +11,7 @@ class CodewalkerToolWindowFactory : ToolWindowFactory {
         val panel = CodewalkerPanel(project)
         val content = ContentFactory.getInstance()
             .createContent(panel.root, "", false)
-        Disposer.register(toolWindow.disposable) { panel.dispose() }
+        Disposer.register(toolWindow.disposable, panel)
         toolWindow.contentManager.addContent(content)
     }
 }

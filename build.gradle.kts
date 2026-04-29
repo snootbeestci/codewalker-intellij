@@ -22,7 +22,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.github.snootbeestci:codewalker-proto:v0.3.10") {
+    implementation("com.github.snootbeestci:codewalker-proto:v0.5.0") {
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core-jvm")
     }
@@ -37,6 +37,7 @@ dependencies {
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     intellijPlatform {
         create(providers.gradleProperty("platformType").get(), providers.gradleProperty("platformVersion").get())
+        bundledPlugin("Git4Idea")
         pluginVerifier()
         zipSigner()
         testFramework(TestFrameworkType.Platform)

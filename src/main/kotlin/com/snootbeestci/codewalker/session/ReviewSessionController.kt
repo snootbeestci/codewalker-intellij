@@ -33,12 +33,12 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
 
     init {
         panel.loadingPanel.cancelButton.addActionListener { cancel() }
-        panel.idlePanel.setOpenReviewAction { openReview() }
+        panel.idlePanel.setPullRequestClickHandler { pr ->
+            openReview(pr.url, panel.idlePanel.getExperienceLevel())
+        }
     }
 
-    private fun openReview() {
-        val url = panel.idlePanel.getUrl()
-        val level = panel.idlePanel.getExperienceLevel()
+    private fun openReview(url: String, level: String) {
         panel.idlePanel.clearError()
         panel.showLoading()
 
@@ -101,8 +101,8 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                val msg = ReviewErrorFormatter.format(e)
-                withContext(Dispatchers.Main) { panel.showError(msg) }
+                val formatted = ReviewErrorFormatter.format(e)
+                withContext(Dispatchers.Main) { panel.showError(formatted.message) }
             }
         }
     }
