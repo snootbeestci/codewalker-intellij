@@ -109,6 +109,6 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
 
     private fun resolveForgeToken(host: String): String {
         if (host.isEmpty()) return ""
-        return TokenStore().get(host) ?: ""
+        return TokenStore.getInstance().get(host) ?: ""
     }
 }

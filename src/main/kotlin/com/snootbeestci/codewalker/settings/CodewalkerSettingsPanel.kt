@@ -18,7 +18,7 @@ import javax.swing.ListSelectionModel
 import javax.swing.table.DefaultTableModel
 
 class CodewalkerSettingsPanel(
-    private val tokenStore: TokenStore = TokenStore(),
+    private val tokenStore: TokenStore = TokenStore.getInstance(),
     private val ghCli: GhCli = GhCli(),
 ) {
     val root: JPanel = JPanel(GridBagLayout())

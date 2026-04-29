@@ -69,7 +69,14 @@ Stored via `PersistentStateComponent` in `codewalker.xml`:
   enumeration. Treat the credential store as authoritative for whether a
   token exists; `knownHosts` is only used to populate the settings table.
 
-Forge tokens are stored in the IDE `PasswordSafe`, one credential per host:
+Forge tokens are stored in the IDE `PasswordSafe`, one credential per host.
+`TokenStore` is the only entry point for reading or writing tokens — no
+controller or panel reads `PasswordSafe` directly.
+
+- `TokenStore` is registered as an application-level service
+  (`@Service(Service.Level.APP)`); production code accesses it via
+  `TokenStore.getInstance()`. Tests construct instances directly with
+  custom adapters.
 - Credential key: `Codewalker.ForgeToken.<host>` where `<host>` is the
   canonical form returned by `HostNormalizer.normalize` (lowercase, no
   scheme, no trailing slash, port preserved when non-default)

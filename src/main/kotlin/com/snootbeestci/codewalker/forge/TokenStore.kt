@@ -2,6 +2,8 @@ package com.snootbeestci.codewalker.forge
 
 import com.intellij.credentialStore.CredentialAttributes
 import com.intellij.ide.passwordSafe.PasswordSafe
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.components.Service
 import com.snootbeestci.codewalker.settings.CodewalkerSettings
 
 /**
@@ -12,7 +14,13 @@ import com.snootbeestci.codewalker.settings.CodewalkerSettings
  * through `PasswordSafe` itself, so the set of known hosts is mirrored in
  * `CodewalkerSettings.knownHosts` — never read this list as authoritative
  * for whether a token exists, only for which hosts to display in the UI.
+ *
+ * Registered as an application-level service. Production code accesses
+ * the singleton via `TokenStore.getInstance()`. Tests construct instances
+ * directly with their own adapters; `@Service` does not prevent direct
+ * construction, it only registers a singleton for `service<T>()` lookups.
  */
+@Service(Service.Level.APP)
 class TokenStore(
     private val passwordSafe: PasswordSafeAdapter = DefaultPasswordSafeAdapter,
     private val settings: () -> CodewalkerSettings = { CodewalkerSettings.getInstance() },
@@ -70,7 +78,7 @@ class TokenStore(
         fun setPassword(key: String, value: String?)
     }
 
-    private object DefaultPasswordSafeAdapter : PasswordSafeAdapter {
+    internal object DefaultPasswordSafeAdapter : PasswordSafeAdapter {
         override fun getPassword(key: String): String? =
             PasswordSafe.instance.getPassword(CredentialAttributes(key))
 
@@ -83,5 +91,12 @@ class TokenStore(
         const val KEY_PREFIX = "Codewalker.ForgeToken."
 
         fun credentialKey(host: String): String = KEY_PREFIX + host
+
+        /**
+         * Application-level singleton accessor. Tests construct instances
+         * directly with their own adapters; production code uses this.
+         */
+        fun getInstance(): TokenStore =
+            ApplicationManager.getApplication().getService(TokenStore::class.java)
     }
 }

@@ -19,6 +19,8 @@
                 displayName="Codewalker"/>
         <applicationService
             serviceImplementation="com.snootbeestci.codewalker.grpc.CodewalkerClient"/>
+        <applicationService
+            serviceImplementation="com.snootbeestci.codewalker.forge.TokenStore"/>
         <postStartupActivity
             implementation="com.snootbeestci.codewalker.grpc.CodewalkerStartupActivity"/>
         <toolWindow
