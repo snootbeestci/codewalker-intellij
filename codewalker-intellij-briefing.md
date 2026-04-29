@@ -159,9 +159,15 @@ the user happens to be logged into via `gh`.
 ### Host string contract
 
 All host strings must use the canonical form: bare hostname, lowercase, no
-scheme, no trailing slash, port only when non-default. The plugin normalises
-both before keying the `TokenStore` and before sending host-bearing RPC
-fields, so the keying matches what the server expects on the wire.
+scheme, no trailing slash, no trailing dot, port only when non-default. The
+plugin normalises before keying the `TokenStore` and before sending
+host-bearing RPC fields, so the keying matches what the server expects on
+the wire.
+
+The canonicalisation rules are mirrored exactly between
+`HostNormalizer.normalize` here and `forge.NormalizeHost` in the server
+repo. Any change to either must be paired with the same change on the
+other side and the test suites updated to drift-detect.
 
 URL parsing for the review URL field uses `HostNormalizer.fromUrlResult`,
 which returns a sealed result type distinguishing empty input, parse
