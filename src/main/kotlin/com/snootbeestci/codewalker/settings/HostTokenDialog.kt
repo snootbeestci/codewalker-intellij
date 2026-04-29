@@ -2,6 +2,7 @@ package com.snootbeestci.codewalker.settings
 
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.ValidationInfo
+import com.intellij.ui.components.JBPasswordField
 import com.intellij.ui.components.JBTextField
 import com.snootbeestci.codewalker.forge.HostNormalizer
 import java.awt.GridBagConstraints
@@ -10,13 +11,15 @@ import java.awt.Insets
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
-import javax.swing.JPasswordField
 
 class HostTokenDialog(initialHost: String, initialToken: String) :
     DialogWrapper(true) {
 
     private val hostField = JBTextField(initialHost, 30)
-    private val tokenField = JPasswordField(initialToken, 30)
+    private val tokenField = JBPasswordField().apply {
+        text = initialToken
+        columns = 30
+    }
 
     init {
         title = "Forge Token"
