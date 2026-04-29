@@ -67,9 +67,21 @@ class EditorHighlighter(private val project: Project) {
             )
         }
 
-        val scrollLine = (ranges.firstOrNull()?.first ?: span.newStart) - 1
+        val firstHighlightLine = ranges.firstOrNull()?.first ?: span.newStart
+        val scrollLine = (firstHighlightLine - 1)
+            .coerceAtLeast(0)
+            .coerceAtMost(document.lineCount - 1)
+
+        if (firstHighlightLine - 1 > document.lineCount - 1) {
+            log.debug(
+                "Codewalker: hunk targets line $firstHighlightLine but working-tree " +
+                    "${span.filePath} has only ${document.lineCount} lines — file is " +
+                    "likely out of sync with the PR head. Scrolling to end of file."
+            )
+        }
+
         editor.scrollingModel.scrollTo(
-            LogicalPosition(scrollLine.coerceAtLeast(0), 0),
+            LogicalPosition(scrollLine, 0),
             ScrollType.CENTER
         )
     }
@@ -80,6 +92,12 @@ class EditorHighlighter(private val project: Project) {
         currentEditor = null
     }
 
+    // TODO: this opens the working-tree copy of the file, which can disagree
+    // with the PR head ref's content. Hunks may reference lines that don't
+    // exist in the working tree, or highlight unrelated lines if the working
+    // tree is on a different branch. Fetching the file at the PR head ref via
+    // the backend's FetchFile RPC and rendering it in a virtual editor would
+    // be the principled fix. Tracked separately.
     private fun findFile(filePath: String): VirtualFile? {
         val basePath = project.basePath
         if (basePath != null) {
