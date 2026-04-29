@@ -192,6 +192,32 @@ letters `sso`.
 
 ---
 
+## Project entry point
+
+The plugin's idle screen lists open pull requests for the current project's
+GitHub remote, rather than asking the user to paste a URL. The remote is
+detected via Git4Idea (`GitRepositoryManager.getInstance(project)`),
+parsed by `GitHubRemoteResolver` into a canonical (host, owner, repo)
+triple, and the host is normalised via `HostNormalizer.normalize` before
+either keying into `TokenStore` or being sent on the wire.
+
+PRs are fetched via the backend's `ListPullRequests` RPC. The
+`forge_token` is resolved client-side via `TokenStore.getInstance().get(host)` —
+empty for hosts the user has not signed into, which downgrades to
+unauthenticated public access for that fetch.
+
+Refresh is manual via the refresh button — no automatic polling.
+
+Hosts containing "github" are accepted (covers github.com and any GitHub
+Enterprise instance). Other hosts (gitlab, bitbucket, gitea) are
+explicitly rejected with an informational message; they are out of scope
+until the corresponding ForgeHandler exists on the backend.
+
+The plugin declares a `Git4Idea` dependency in `plugin.xml` so the
+JetBrains Git integration is available at runtime in any host IDE.
+
+---
+
 ## Future direction
 
 - **Walkthrough sessions** — explain a file in the open project step by step

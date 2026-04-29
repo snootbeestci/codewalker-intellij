@@ -1,7 +1,9 @@
 package com.snootbeestci.codewalker.grpc
 
 import codewalker.v1.CodeWalkerGrpcKt
+import codewalker.v1.Codewalker.ListPullRequestsResponse
 import codewalker.v1.getVersionRequest
+import codewalker.v1.listPullRequestsRequest
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
@@ -53,6 +55,21 @@ class CodewalkerClient : Disposable {
     }
 
     fun getStub(): CodeWalkerGrpcKt.CodeWalkerCoroutineStub? = stub
+
+    suspend fun listPullRequests(
+        host: String,
+        owner: String,
+        repo: String,
+        forgeToken: String,
+    ): ListPullRequestsResponse {
+        val s = stub ?: error("Not connected to backend")
+        return s.listPullRequests(listPullRequestsRequest {
+            this.host = host
+            this.owner = owner
+            this.repo = repo
+            this.forgeToken = forgeToken
+        })
+    }
 
     override fun dispose() { disconnect() }
 

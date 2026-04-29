@@ -13,7 +13,7 @@ class CodewalkerPanel(project: Project) {
     val root: JPanel = JPanel(CardLayout())
 
     private val disconnectedPanel = DisconnectedPanel()
-    internal val idlePanel = IdlePanel()
+    internal val idlePanel = IdlePanel(project)
     internal val loadingPanel = LoadingPanel()
     private val sessionPanel = SessionPanel(project)
     private val controller = ReviewSessionController(this)
@@ -43,7 +43,10 @@ class CodewalkerPanel(project: Project) {
                 disconnectedPanel.update(state)
                 "DISCONNECTED"
             }
-            CodewalkerClient.ConnectionState.CONNECTED -> "IDLE"
+            CodewalkerClient.ConnectionState.CONNECTED -> {
+                idlePanel.refreshPullRequests()
+                "IDLE"
+            }
         }
         (root.layout as CardLayout).show(root, card)
     }
@@ -63,5 +66,6 @@ class CodewalkerPanel(project: Project) {
         controller.dispose()
         sessionPanel.dispose()
         disconnectedPanel.dispose()
+        idlePanel.dispose()
     }
 }
