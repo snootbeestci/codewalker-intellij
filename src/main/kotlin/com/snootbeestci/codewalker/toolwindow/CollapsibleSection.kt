@@ -10,7 +10,12 @@ import java.awt.event.MouseEvent
 import javax.swing.BorderFactory
 import javax.swing.JPanel
 
-class CollapsibleSection(title: String, private val content: Component, expanded: Boolean = false) {
+class CollapsibleSection(
+    title: String,
+    private val content: Component,
+    expanded: Boolean = false,
+    private val onToggle: (Boolean) -> Unit = {},
+) {
 
     val root: JPanel = JPanel(BorderLayout())
 
@@ -42,6 +47,7 @@ class CollapsibleSection(title: String, private val content: Component, expanded
         arrowLabel.icon = if (isExpanded) AllIcons.General.ArrowDown else AllIcons.General.ArrowRight
         root.revalidate()
         root.repaint()
+        onToggle(isExpanded)
     }
 
     fun expand() {
