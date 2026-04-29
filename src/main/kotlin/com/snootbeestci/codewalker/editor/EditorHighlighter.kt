@@ -3,6 +3,7 @@ package com.snootbeestci.codewalker.editor
 import codewalker.v1.Codewalker.ForgeContext
 import codewalker.v1.Codewalker.HunkSpan
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
@@ -233,11 +234,25 @@ class EditorHighlighter(
             }
         }
         val descriptor = OpenFileDescriptor(project, virtualFile)
-        val editor = FileEditorManager.getInstance(project).openTextEditor(descriptor, true)
+        val manager = FileEditorManager.getInstance(project)
+
+        // Open synchronously without focus to avoid the LightVirtualFile race
+        // where openTextEditor tries to focus a not-yet-fully-constructed editor.
+        val editor = manager.openTextEditor(descriptor, false)
+
+        // Bring the tab to the foreground on the next EDT cycle. By that point
+        // the editor's preferredFocusedComponent is wired up. We pass
+        // focusEditor = false because we only want tab selection, not
+        // inner-component focus (which is what races on LightVirtualFile).
+        ApplicationManager.getApplication().invokeLater {
+            manager.openFile(virtualFile, /* focusEditor = */ false, /* searchForOpen = */ true)
+        }
+
         log.info(
             "Codewalker: opened head-ref tab for $path; selected file is " +
-                "${FileEditorManager.getInstance(project).selectedFiles.firstOrNull()?.name}"
+                "${manager.selectedFiles.firstOrNull()?.name}"
         )
+
         return editor
     }
 
