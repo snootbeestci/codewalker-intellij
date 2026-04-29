@@ -7,7 +7,9 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.ui.JBSplitter
 import com.intellij.ui.components.JBScrollPane
+import com.intellij.util.ui.JBUI
 import com.snootbeestci.codewalker.editor.EditorHighlighter
 import com.snootbeestci.codewalker.session.NavigationController
 import com.snootbeestci.codewalker.session.ReviewSessionController
@@ -19,7 +21,6 @@ import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import java.awt.Insets
 import javax.swing.BorderFactory
-import javax.swing.BoxLayout
 import javax.swing.DefaultListModel
 import javax.swing.JButton
 import javax.swing.JLabel
@@ -28,6 +29,25 @@ import javax.swing.JPanel
 import javax.swing.JTextPane
 import javax.swing.ListSelectionModel
 import javax.swing.SwingConstants
+
+internal fun longestCommonDirectoryPrefix(paths: List<String>): String {
+    if (paths.isEmpty()) return ""
+    if (paths.size == 1) {
+        return paths[0].substringBeforeLast('/', "").let { if (it.isEmpty()) "" else "$it/" }
+    }
+    val split = paths.map { it.split('/') }
+    val minLen = split.minOf { it.size } - 1
+    var common = 0
+    outer@ for (i in 0 until minLen) {
+        val first = split[0][i]
+        for (other in split.drop(1)) {
+            if (other[i] != first) break@outer
+        }
+        common++
+    }
+    if (common == 0) return ""
+    return split[0].take(common).joinToString("/", postfix = "/")
+}
 
 class SessionPanel(
     private val project: Project,
@@ -58,10 +78,16 @@ class SessionPanel(
         preferredSize = Dimension(360, 180)
         minimumSize = Dimension(200, 120)
     }
+    private val bodyColumn = JBSplitter(true, 0.7f).apply {
+        dividerWidth = 3
+    }
     private val narrationCollapsible = CollapsibleSection(
         title = "Detailed narration",
         content = narrationScroll,
-        expanded = false
+        expanded = false,
+        onToggle = { expanded ->
+            bodyColumn.proportion = if (expanded) 0.7f else COLLAPSED_PROPORTION
+        }
     )
     private val backButton = JButton("← Back").apply { isEnabled = false }
     private val forwardButton = JButton("Forward →").apply { isEnabled = false }
@@ -97,8 +123,7 @@ class SessionPanel(
         breadcrumbLabel.border = BorderFactory.createEmptyBorder(4, 8, 4, 8)
 
         val stepListScroll = JBScrollPane(stepList).apply {
-            preferredSize = Dimension(220, 200)
-            minimumSize = Dimension(160, 120)
+            minimumSize = Dimension(120, 80)
         }
 
         val navBar = JPanel(GridBagLayout()).apply {
@@ -115,15 +140,21 @@ class SessionPanel(
             })
         }
 
-        val bodyColumn = JPanel().apply {
-            layout = BoxLayout(this, BoxLayout.Y_AXIS)
-            add(summaryTable.root)
-            add(narrationCollapsible.root)
+        val summaryWrapper = JPanel(BorderLayout()).apply {
+            border = JBUI.Borders.empty(8, 0, 0, 0)
+            add(summaryTable.root, BorderLayout.NORTH)
+            add(JPanel().apply { isOpaque = false }, BorderLayout.CENTER)
         }
 
-        val body = JPanel(BorderLayout()).apply {
-            add(stepListScroll, BorderLayout.WEST)
-            add(bodyColumn, BorderLayout.CENTER)
+        bodyColumn.firstComponent = summaryWrapper
+        bodyColumn.secondComponent = narrationCollapsible.root
+        // Initial state: narration collapsed → give summary almost all the space.
+        bodyColumn.proportion = COLLAPSED_PROPORTION
+
+        val bodySplitter = JBSplitter(false, 0.3f).apply {
+            firstComponent = stepListScroll
+            secondComponent = bodyColumn
+            dividerWidth = 3
         }
 
         fun row(component: Component, gridy: Int, weighty: Double, fill: Int) {
@@ -136,7 +167,7 @@ class SessionPanel(
 
         row(header, 0, 0.0, GridBagConstraints.HORIZONTAL)
         row(breadcrumbLabel, 1, 0.0, GridBagConstraints.HORIZONTAL)
-        row(body, 2, 1.0, GridBagConstraints.BOTH)
+        row(bodySplitter, 2, 1.0, GridBagConstraints.BOTH)
         row(navBar, 3, 0.0, GridBagConstraints.HORIZONTAL)
     }
 
@@ -146,7 +177,7 @@ class SessionPanel(
         stepList.addListSelectionListener { event ->
             if (event.valueIsAdjusting) return@addListSelectionListener
             val item = stepList.selectedValue ?: return@addListSelectionListener
-            if (item is StepListItem.Header) {
+            if (item is StepListItem.Header || item is StepListItem.Subtitle) {
                 stepList.clearSelection()
                 return@addListSelectionListener
             }
@@ -234,8 +265,17 @@ class SessionPanel(
             }
             grouped.getOrPut(path.ifEmpty { "(unknown)" }) { mutableListOf() }.add(step)
         }
+        val prefix = longestCommonDirectoryPrefix(grouped.keys.toList())
+        if (prefix.isNotEmpty()) {
+            stepListModel.addElement(StepListItem.Subtitle(prefix))
+        }
         for ((path, fileSteps) in grouped) {
-            stepListModel.addElement(StepListItem.Header(path))
+            val displayPath = if (prefix.isNotEmpty() && path.startsWith(prefix)) {
+                path.removePrefix(prefix)
+            } else {
+                path
+            }
+            stepListModel.addElement(StepListItem.Header(displayPath))
             fileSteps.forEachIndexed { index, step ->
                 val span = step.hunkSpan
                 val end = span.newStart + maxOf(span.newLines, 1) - 1
@@ -258,6 +298,7 @@ class SessionPanel(
     }
 
     private sealed class StepListItem {
+        data class Subtitle(val text: String) : StepListItem()
         data class Header(val filePath: String) : StepListItem()
         data class StepRow(val stepId: String, val label: String) : StepListItem()
     }
@@ -273,6 +314,7 @@ class SessionPanel(
             cellHasFocus: Boolean
         ): Component {
             val text = when (value) {
+                is StepListItem.Subtitle -> value.text
                 is StepListItem.Header -> value.filePath
                 is StepListItem.StepRow -> "    " + value.label
             }
@@ -280,13 +322,23 @@ class SessionPanel(
             val component = delegate.getListCellRendererComponent(
                 list, text, index, showSelected, cellHasFocus
             ) as JLabel
-            if (value is StepListItem.Header) {
-                component.font = component.font.deriveFont(Font.BOLD)
-                component.horizontalAlignment = SwingConstants.LEFT
-                component.background = list.background
-                component.foreground = list.foreground
-            } else {
-                component.font = component.font.deriveFont(Font.PLAIN)
+            when (value) {
+                is StepListItem.Subtitle -> {
+                    val baseSize = component.font.size2D
+                    component.font = component.font.deriveFont(Font.ITALIC, baseSize - 1f)
+                    component.horizontalAlignment = SwingConstants.LEFT
+                    component.background = list.background
+                    component.foreground = list.foreground
+                }
+                is StepListItem.Header -> {
+                    component.font = component.font.deriveFont(Font.BOLD)
+                    component.horizontalAlignment = SwingConstants.LEFT
+                    component.background = list.background
+                    component.foreground = list.foreground
+                }
+                is StepListItem.StepRow -> {
+                    component.font = component.font.deriveFont(Font.PLAIN)
+                }
             }
             return component
         }
@@ -294,5 +346,6 @@ class SessionPanel(
 
     companion object {
         private const val MAX_LEVEL = 10
+        private const val COLLAPSED_PROPORTION = 0.95f
     }
 }
