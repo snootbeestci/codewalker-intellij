@@ -78,16 +78,10 @@ class SessionPanel(
         preferredSize = Dimension(360, 180)
         minimumSize = Dimension(200, 120)
     }
-    private val bodyColumn = JBSplitter(true, 0.7f).apply {
-        dividerWidth = 3
-    }
     private val narrationCollapsible = CollapsibleSection(
         title = "Detailed narration",
         content = narrationScroll,
         expanded = false,
-        onToggle = { expanded ->
-            bodyColumn.proportion = if (expanded) 0.7f else COLLAPSED_PROPORTION
-        }
     )
     private val backButton = JButton("← Back").apply { isEnabled = false }
     private val forwardButton = JButton("Forward →").apply { isEnabled = false }
@@ -143,17 +137,12 @@ class SessionPanel(
         val summaryWrapper = JPanel(BorderLayout()).apply {
             border = JBUI.Borders.empty(8, 0, 0, 0)
             add(summaryTable.root, BorderLayout.NORTH)
-            add(JPanel().apply { isOpaque = false }, BorderLayout.CENTER)
+            add(narrationCollapsible.root, BorderLayout.CENTER)
         }
-
-        bodyColumn.firstComponent = summaryWrapper
-        bodyColumn.secondComponent = narrationCollapsible.root
-        // Initial state: narration collapsed → give summary almost all the space.
-        bodyColumn.proportion = COLLAPSED_PROPORTION
 
         val bodySplitter = JBSplitter(false, 0.3f).apply {
             firstComponent = stepListScroll
-            secondComponent = bodyColumn
+            secondComponent = summaryWrapper
             dividerWidth = 3
         }
 
@@ -346,6 +335,5 @@ class SessionPanel(
 
     companion object {
         private const val MAX_LEVEL = 10
-        private const val COLLAPSED_PROPORTION = 0.95f
     }
 }
