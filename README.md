@@ -32,6 +32,14 @@ then in IntelliJ: Settings → Plugins → ⚙️ → Install Plugin from Disk.
 Settings → Tools → Codewalker. The default backend address (`localhost:50051`)
 works if you're running the backend locally.
 
+For private repositories, add a forge token in the same settings page. Tokens
+are stored per host in the IDE `PasswordSafe`, so you can hold separate
+credentials for `github.com` and any GitHub Enterprise instance. If you
+already use the [`gh` CLI](https://cli.github.com/), click "Import from gh
+CLI" and enter the hostname — the plugin will run
+`gh auth token --hostname <host>` and store the result for you. Public
+repositories work without a token.
+
 **4. Review a PR**
 
 Open the Codewalker tool window (right side panel), paste a GitHub PR URL,

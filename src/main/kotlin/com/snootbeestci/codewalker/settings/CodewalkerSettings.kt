@@ -15,7 +15,8 @@ class CodewalkerSettings : PersistentStateComponent<CodewalkerSettings.State> {
 
     data class State(
         var backendAddress: String = "localhost:50051",
-        var experienceLevel: String = "EXPERIENCE_LEVEL_MID"
+        var experienceLevel: String = "EXPERIENCE_LEVEL_MID",
+        var knownHosts: MutableList<String> = mutableListOf()
     )
 
     private var state = State()

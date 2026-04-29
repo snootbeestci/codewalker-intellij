@@ -6,8 +6,8 @@ import codewalker.v1.Codewalker.GlossaryTerm
 import codewalker.v1.Codewalker.SessionEvent
 import codewalker.v1.Codewalker.Step
 import codewalker.v1.openReviewSessionRequest
-import com.intellij.credentialStore.CredentialAttributes
-import com.intellij.ide.passwordSafe.PasswordSafe
+import com.snootbeestci.codewalker.forge.HostNormalizer
+import com.snootbeestci.codewalker.forge.TokenStore
 import com.snootbeestci.codewalker.grpc.CodewalkerClient
 import com.snootbeestci.codewalker.toolwindow.CodewalkerPanel
 import kotlinx.coroutines.CancellationException
@@ -55,10 +55,11 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
                     else -> ExperienceLevel.EXPERIENCE_LEVEL_MID
                 }
 
+                val host = HostNormalizer.fromUrl(url)
                 val request = openReviewSessionRequest {
                     this.url = url
                     experienceLevel = expLevel
-                    forgeToken = resolveForgeToken()
+                    forgeToken = resolveForgeToken(host)
                 }
 
                 stub.openReviewSession(request).collect { event ->
@@ -89,7 +90,7 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                val msg = e.message ?: "Unknown error"
+                val msg = ReviewErrorFormatter.format(e)
                 withContext(Dispatchers.Main) { panel.showError(msg) }
             }
         }
@@ -106,6 +107,8 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
         panel.showState(CodewalkerClient.getInstance().connectionState)
     }
 
-    private fun resolveForgeToken(): String =
-        PasswordSafe.instance.getPassword(CredentialAttributes("Codewalker.GitHubToken")) ?: ""
+    private fun resolveForgeToken(host: String): String {
+        if (host.isEmpty()) return ""
+        return TokenStore().get(host) ?: ""
+    }
 }

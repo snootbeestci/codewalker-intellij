@@ -64,10 +64,18 @@ Never copy the `.proto` file into this repo.
 Stored via `PersistentStateComponent` in `codewalker.xml`:
 - `backendAddress` — default `localhost:50051`
 - `experienceLevel` — default `EXPERIENCE_LEVEL_MID`
+- `knownHosts` — list of hosts that have a token in `PasswordSafe`. Mirrored
+  from the credential store because `PasswordSafe` does not expose
+  enumeration. Treat the credential store as authoritative for whether a
+  token exists; `knownHosts` is only used to populate the settings table.
 
-GitHub token is stored in the IDE `PasswordSafe` (not in XML):
-- Credential key: `Codewalker.GitHubToken`
-- Optional — absence means public repo mode
+Forge tokens are stored in the IDE `PasswordSafe`, one credential per host:
+- Credential key: `Codewalker.ForgeToken.<host>` where `<host>` is the
+  canonical form returned by `HostNormalizer.normalize` (lowercase, no
+  scheme, no trailing slash, port preserved when non-default)
+- Tokens are optional — absence means public repo mode for that host
+- `gh` CLI tokens are imported on demand via the settings UI; the plugin
+  never reads `gh` ambient credentials at request time
 
 Settings page registered under Settings → Tools → Codewalker.
 
@@ -116,11 +124,38 @@ and the summary table.
 
 ## Token resolution order
 
-When opening a review session the plugin resolves a forge token as follows:
-1. Token from IDE `PasswordSafe` if present
+The plugin parses the canonical host from the review URL via
+`HostNormalizer.fromUrl(url)`, then resolves a forge token as follows:
+1. Per-host token from IDE `PasswordSafe` (`Codewalker.ForgeToken.<host>`)
 2. Empty string — public repo mode
 
-`gh` CLI token resolution is handled server-side, not by the plugin.
+Server-side token resolution has been removed from the backend; the plugin
+is the sole source of truth for which token to send. `forge_token` on the
+RPC is opaque to the server: empty means unauthenticated, non-empty is used
+verbatim.
+
+The `gh` CLI is **not** consulted at request time. Users import a token
+explicitly from the settings page via the "Import from gh CLI" toolbar
+action, which runs `gh auth token --hostname <host>` once and stores the
+result in `PasswordSafe`. This avoids silently leaking whichever credential
+the user happens to be logged into via `gh`.
+
+### Host string contract
+
+All host strings must use the canonical form: bare hostname, lowercase, no
+scheme, no trailing slash, port only when non-default. The plugin normalises
+both before keying the `TokenStore` and before sending host-bearing RPC
+fields, so the keying matches what the server expects on the wire.
+
+### 403 / SSO error rendering
+
+`ReviewErrorFormatter.format` converts gRPC errors into user-facing strings.
+For `PERMISSION_DENIED`, the server includes the forge's response body in
+the status description (truncated to ~500 chars). When that body contains
+SSO markers (`SAML enforcement`, `single sign-on`, `must have admin
+rights`, `SSO`), the formatter prepends `Authorization required:` so the
+user knows the token is valid but needs SSO authorisation rather than
+replacement.
 
 ---
 
