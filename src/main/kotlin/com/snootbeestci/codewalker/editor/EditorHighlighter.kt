@@ -14,6 +14,7 @@ import com.intellij.openapi.editor.markup.RangeHighlighter
 import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
+import com.intellij.openapi.fileEditor.TextEditor
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -232,8 +233,15 @@ class EditorHighlighter(
                 isWritable = false
             }
         }
-        val descriptor = OpenFileDescriptor(project, virtualFile)
-        return FileEditorManager.getInstance(project).openTextEditor(descriptor, false)
+        val manager = FileEditorManager.getInstance(project)
+        // openFile selects the tab without focusing the inner editor component,
+        // avoiding the LightVirtualFile focus race while still bringing the
+        // correct tab to the foreground.
+        manager.openFile(virtualFile, /* focusEditor = */ false, /* searchForOpen = */ true)
+        return (manager.getSelectedEditor(virtualFile) as? TextEditor)?.editor
+            ?: manager.allEditors.filterIsInstance<TextEditor>()
+                .firstOrNull { it.file == virtualFile }
+                ?.editor
     }
 
     override fun dispose() {
