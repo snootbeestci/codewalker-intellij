@@ -86,6 +86,15 @@ controller or panel reads `PasswordSafe` directly.
 
 Settings page registered under Settings → Tools → Codewalker.
 
+### Legacy credential migration
+
+A `LegacyTokenMigration` `ProjectActivity` runs on first project open after
+upgrade. If the pre-multi-host `Codewalker.GitHubToken` credential exists,
+it is copied to `Codewalker.ForgeToken.github.com` (unless that per-host
+key is already set, in which case the user's explicit configuration wins)
+and the legacy credential is cleared. The migration is idempotent and
+safe to run repeatedly.
+
 ---
 
 ## Tool window
