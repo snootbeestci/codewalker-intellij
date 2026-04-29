@@ -95,3 +95,126 @@ class SummaryTableTest {
         }
     }
 }
+
+class SeverityParserTest {
+
+    @Test
+    fun `breaking yes is red`() {
+        assertEquals(Severity.RED, SeverityParser.forBreaking("Yes"))
+    }
+
+    @Test
+    fun `breaking no is green`() {
+        assertEquals(Severity.GREEN, SeverityParser.forBreaking("No"))
+    }
+
+    @Test
+    fun `breaking empty is neutral`() {
+        assertEquals(Severity.NEUTRAL, SeverityParser.forBreaking(""))
+    }
+
+    @Test
+    fun `breaking placeholder is neutral`() {
+        assertEquals(Severity.NEUTRAL, SeverityParser.forBreaking("—"))
+    }
+
+    @Test
+    fun `breaking with trailing prose is yes`() {
+        assertEquals(Severity.RED, SeverityParser.forBreaking("Yes — removes a public method"))
+    }
+
+    @Test
+    fun `breaking case-insensitive`() {
+        assertEquals(Severity.RED, SeverityParser.forBreaking("YES"))
+        assertEquals(Severity.GREEN, SeverityParser.forBreaking("no"))
+    }
+
+    @Test
+    fun `breaking unknown defaults to green`() {
+        assertEquals(Severity.GREEN, SeverityParser.forBreaking("maybe"))
+    }
+
+    @Test
+    fun `risk levels parse correctly`() {
+        assertEquals(Severity.GREEN, SeverityParser.forRisk("Low"))
+        assertEquals(Severity.AMBER, SeverityParser.forRisk("Medium"))
+        assertEquals(Severity.RED, SeverityParser.forRisk("High"))
+    }
+
+    @Test
+    fun `risk with explanation parses on first word`() {
+        assertEquals(Severity.AMBER, SeverityParser.forRisk("Medium — touches payment flow"))
+        assertEquals(Severity.RED, SeverityParser.forRisk("High, breaks API contract"))
+    }
+
+    @Test
+    fun `risk empty is neutral`() {
+        assertEquals(Severity.NEUTRAL, SeverityParser.forRisk(""))
+    }
+
+    @Test
+    fun `risk placeholder is neutral`() {
+        assertEquals(Severity.NEUTRAL, SeverityParser.forRisk("—"))
+    }
+
+    @Test
+    fun `risk unknown defaults to green`() {
+        assertEquals(Severity.GREEN, SeverityParser.forRisk("Probably low"))
+    }
+
+    @Test
+    fun `tests added or modified is green`() {
+        assertEquals(Severity.GREEN, SeverityParser.forTests("Added"))
+        assertEquals(Severity.GREEN, SeverityParser.forTests("Modified"))
+    }
+
+    @Test
+    fun `tests missing is amber`() {
+        assertEquals(Severity.AMBER, SeverityParser.forTests("Missing"))
+    }
+
+    @Test
+    fun `tests empty is neutral`() {
+        assertEquals(Severity.NEUTRAL, SeverityParser.forTests(""))
+    }
+
+    @Test
+    fun `worst red dominates`() {
+        assertEquals(
+            Severity.RED,
+            SeverityParser.worst(Severity.GREEN, Severity.AMBER, Severity.RED),
+        )
+    }
+
+    @Test
+    fun `worst amber when no red`() {
+        assertEquals(
+            Severity.AMBER,
+            SeverityParser.worst(Severity.GREEN, Severity.AMBER, Severity.GREEN),
+        )
+    }
+
+    @Test
+    fun `worst green when all green`() {
+        assertEquals(
+            Severity.GREEN,
+            SeverityParser.worst(Severity.GREEN, Severity.GREEN, Severity.GREEN),
+        )
+    }
+
+    @Test
+    fun `worst neutral when all neutral`() {
+        assertEquals(
+            Severity.NEUTRAL,
+            SeverityParser.worst(Severity.NEUTRAL, Severity.NEUTRAL, Severity.NEUTRAL),
+        )
+    }
+
+    @Test
+    fun `worst ignores neutral fields`() {
+        assertEquals(
+            Severity.AMBER,
+            SeverityParser.worst(Severity.NEUTRAL, Severity.AMBER, Severity.NEUTRAL),
+        )
+    }
+}

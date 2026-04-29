@@ -129,6 +129,28 @@ when `complete.hasSummary()` is true, otherwise passes `null` (which clears
 the table). `SessionPanel.clearNarration` clears both the narration pane
 and the summary table.
 
+The summary table colour-codes three signal fields:
+
+- `breaking` — green (No), red (Yes)
+- `risk` — green (Low), amber (Medium), red (High)
+- `tests` — green (Added/Modified), amber (Missing)
+
+Cell foreground colour is set per-field. The whole panel also carries a
+header pill above the rows showing the worst severity across the three
+signal fields: green ("Looks fine"), amber ("Worth a look"), or red
+("Needs attention"). The pill is hidden entirely when no signal is
+available (e.g. before the first step completes). `—` placeholder
+values are treated as no signal and use the default foreground colour.
+
+`confidence` is intentionally not colour-coded. It describes the LLM's
+confidence in its own analysis, which is a meta-signal distinct from the
+risk of the change itself; conflating them would mislead the reviewer.
+Free-text fields (`what_changed`, `side_effects`, `reviewer_focus`,
+`suggestion`) are also uncoloured because their values don't have
+parseable severity.
+
+Colour pairs use `JBColor` so they adapt between light and dark themes.
+
 ---
 
 ## Session model
