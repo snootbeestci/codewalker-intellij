@@ -115,16 +115,14 @@ Inside the SESSION card, the body is a horizontal `JBSplitter`:
 - **First component**: file step list, scrollable, with a subtitle row
   showing the longest common directory prefix across all changed files.
   Per-file headers show the path relative to that prefix.
-- **Second component**: a vertical `JBSplitter` whose
-  - **First component** is the summary panel: a `SummaryTable` pinned to
-    the top via `BorderLayout.NORTH`, with a filler below to anchor it.
-    Cell values are read-only `JTextArea`s with `lineWrap = true` so long
-    text wraps to multiple lines rather than scrolling or truncating.
-  - **Second component** is the `CollapsibleSection` wrapping the
-    streamed narration. Collapsed by default; clicking the header
-    expands it. When expanded, the vertical splitter divider becomes
-    draggable so the user can reapportion space between summary and
-    narration.
+- **Second component**: a `BorderLayout` panel:
+  - **NORTH** — `SummaryTable`. Cell values are read-only `JTextArea`s
+    with `lineWrap = true` so long text wraps to multiple lines rather
+    than scrolling or truncating.
+  - **CENTER** — `CollapsibleSection` wrapping the streamed narration
+    `JTextPane`. Collapsed by default; clicking the header expands it.
+    The header sits directly below the summary fields. When expanded,
+    the narration content grows downward into the available space.
 
 `SessionPanel.onStepComplete` calls `summaryTable.update(complete.summary)`
 when `complete.hasSummary()` is true, otherwise passes `null` (which clears
@@ -305,10 +303,6 @@ opening the working-tree copy unconditionally.
   via `Disposer.register(parent, child)` so cancellation cascades
   automatically — manual `child.dispose()` calls in a parent's
   `dispose()` are a code smell.
-- Resizable body sections use `JBSplitter` (horizontal or vertical) with
-  a proportional initial position and a 3px divider. Avoid `BorderLayout`
-  with fixed-width children when the user might want to see more of one
-  side than the other.
 
 ### Build
 - `./gradlew runIde` — launches a sandboxed IDE with the plugin installed
