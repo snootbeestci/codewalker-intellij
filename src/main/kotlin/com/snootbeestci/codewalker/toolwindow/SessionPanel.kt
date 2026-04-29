@@ -13,7 +13,6 @@ import com.intellij.util.ui.JBUI
 import com.snootbeestci.codewalker.editor.EditorHighlighter
 import com.snootbeestci.codewalker.session.NavigationController
 import com.snootbeestci.codewalker.session.ReviewSessionController
-import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Dimension
 import java.awt.Font
@@ -78,16 +77,10 @@ class SessionPanel(
         preferredSize = Dimension(360, 180)
         minimumSize = Dimension(200, 120)
     }
-    private val bodyColumn = JBSplitter(true, 0.7f).apply {
-        dividerWidth = 3
-    }
     private val narrationCollapsible = CollapsibleSection(
         title = "Detailed narration",
         content = narrationScroll,
         expanded = false,
-        onToggle = { expanded ->
-            bodyColumn.proportion = if (expanded) 0.7f else COLLAPSED_PROPORTION
-        }
     )
     private val backButton = JButton("← Back").apply { isEnabled = false }
     private val forwardButton = JButton("Forward →").apply { isEnabled = false }
@@ -140,20 +133,30 @@ class SessionPanel(
             })
         }
 
-        val summaryWrapper = JPanel(BorderLayout()).apply {
+        val summaryWrapper = JPanel(GridBagLayout()).apply {
             border = JBUI.Borders.empty(8, 0, 0, 0)
-            add(summaryTable.root, BorderLayout.NORTH)
-            add(JPanel().apply { isOpaque = false }, BorderLayout.CENTER)
+            add(summaryTable.root, GridBagConstraints().apply {
+                gridx = 0; gridy = 0
+                weightx = 1.0; weighty = 0.0
+                fill = GridBagConstraints.HORIZONTAL
+                anchor = GridBagConstraints.NORTH
+            })
+            add(JPanel().apply { isOpaque = false }, GridBagConstraints().apply {
+                gridx = 0; gridy = 1
+                weightx = 1.0; weighty = 1.0
+                fill = GridBagConstraints.BOTH
+            })
+            add(narrationCollapsible.root, GridBagConstraints().apply {
+                gridx = 0; gridy = 2
+                weightx = 1.0; weighty = 0.0
+                fill = GridBagConstraints.HORIZONTAL
+                anchor = GridBagConstraints.SOUTH
+            })
         }
-
-        bodyColumn.firstComponent = summaryWrapper
-        bodyColumn.secondComponent = narrationCollapsible.root
-        // Initial state: narration collapsed → give summary almost all the space.
-        bodyColumn.proportion = COLLAPSED_PROPORTION
 
         val bodySplitter = JBSplitter(false, 0.3f).apply {
             firstComponent = stepListScroll
-            secondComponent = bodyColumn
+            secondComponent = summaryWrapper
             dividerWidth = 3
         }
 
@@ -346,6 +349,5 @@ class SessionPanel(
 
     companion object {
         private const val MAX_LEVEL = 10
-        private const val COLLAPSED_PROPORTION = 0.95f
     }
 }
