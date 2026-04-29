@@ -49,6 +49,7 @@ class EditorHighlighter(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val contentCache = mutableMapOf<Pair<String, String>, ByteArray>()
+    private val virtualFileCache = mutableMapOf<Pair<String, String>, LightVirtualFile>()
     private var boundContext: BoundContext? = null
 
     fun bind(forgeContext: ForgeContext?) {
@@ -61,6 +62,7 @@ class EditorHighlighter(
             }
         }
         contentCache.clear()
+        virtualFileCache.clear()
     }
 
     fun highlightHunk(span: HunkSpan) {
@@ -218,14 +220,17 @@ class EditorHighlighter(
     }
 
     private fun openHeadRefContent(path: String, ref: String, content: ByteArray): Editor? {
-        val fileName = path.substringAfterLast('/')
-        val displayName = "$fileName @ ${ref.take(7)}"
-        val virtualFile = LightVirtualFile(
-            displayName,
-            FileTypeManager.getInstance().getFileTypeByFileName(fileName),
-            String(content, Charsets.UTF_8),
-        ).apply {
-            isWritable = false
+        val key = path to ref
+        val virtualFile = virtualFileCache.getOrPut(key) {
+            val fileName = path.substringAfterLast('/')
+            val displayName = "$fileName @ ${ref.take(7)}"
+            LightVirtualFile(
+                displayName,
+                FileTypeManager.getInstance().getFileTypeByFileName(fileName),
+                String(content, Charsets.UTF_8),
+            ).apply {
+                isWritable = false
+            }
         }
         val descriptor = OpenFileDescriptor(project, virtualFile)
         return FileEditorManager.getInstance(project).openTextEditor(descriptor, false)
@@ -234,6 +239,7 @@ class EditorHighlighter(
     override fun dispose() {
         scope.cancel()
         contentCache.clear()
+        virtualFileCache.clear()
         clearHighlight()
     }
 
