@@ -66,18 +66,18 @@ class TokenStore(
         fun setPassword(key: String, value: String?)
     }
 
+    private object DefaultPasswordSafeAdapter : PasswordSafeAdapter {
+        override fun getPassword(key: String): String? =
+            PasswordSafe.instance.getPassword(CredentialAttributes(key))
+
+        override fun setPassword(key: String, value: String?) {
+            PasswordSafe.instance.setPassword(CredentialAttributes(key), value)
+        }
+    }
+
     companion object {
         const val KEY_PREFIX = "Codewalker.ForgeToken."
 
         fun credentialKey(host: String): String = KEY_PREFIX + host
-
-        internal object DefaultPasswordSafeAdapter : PasswordSafeAdapter {
-            override fun getPassword(key: String): String? =
-                PasswordSafe.instance.getPassword(CredentialAttributes(key))
-
-            override fun setPassword(key: String, value: String?) {
-                PasswordSafe.instance.setPassword(CredentialAttributes(key), value)
-            }
-        }
     }
 }

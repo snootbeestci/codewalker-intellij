@@ -21,8 +21,6 @@
             serviceImplementation="com.snootbeestci.codewalker.grpc.CodewalkerClient"/>
         <postStartupActivity
             implementation="com.snootbeestci.codewalker.grpc.CodewalkerStartupActivity"/>
-        <postStartupActivity
-            implementation="com.snootbeestci.codewalker.forge.LegacyTokenMigration"/>
         <toolWindow
             id="Codewalker"
             anchor="right"
