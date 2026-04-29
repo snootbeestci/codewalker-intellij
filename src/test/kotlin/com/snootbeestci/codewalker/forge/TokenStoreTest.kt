@@ -53,11 +53,12 @@ class TokenStoreTest {
     }
 
     @Test
-    fun `setting empty token clears credential and removes from known hosts`() {
+    fun `setting empty token removes credential and known-hosts entry`() {
         val (s, deps) = store()
         s.set("github.com", "tok-1")
         s.set("github.com", "")
         assertNull(s.get("github.com"))
+        assertTrue(deps.first.map.isEmpty())
         assertTrue(deps.second.state.knownHosts.isEmpty())
     }
 

@@ -28,12 +28,16 @@ class TokenStore(
     fun set(host: String, token: String) {
         val key = HostNormalizer.normalize(host)
         if (key.isEmpty()) return
-        passwordSafe.setPassword(credentialKey(key), token)
-        if (token.isNotEmpty()) {
-            rememberHost(key)
-        } else {
+        if (token.isEmpty()) {
+            // Empty token means "remove" — write null to PasswordSafe rather
+            // than an empty-string sentinel, so external credential viewers
+            // and future code paths see no entry at all.
+            passwordSafe.setPassword(credentialKey(key), null)
             forgetHost(key)
+            return
         }
+        passwordSafe.setPassword(credentialKey(key), token)
+        rememberHost(key)
     }
 
     fun remove(host: String) {
