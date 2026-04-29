@@ -10,6 +10,12 @@ import java.net.URI
  */
 object HostNormalizer {
 
+    sealed class UrlParseResult {
+        data class Ok(val host: String) : UrlParseResult()
+        data object Empty : UrlParseResult()
+        data class ParseFailed(val reason: String) : UrlParseResult()
+    }
+
     fun normalize(s: String): String {
         var v = s.trim()
         v = v.removePrefix("https://")
@@ -20,25 +26,35 @@ object HostNormalizer {
     }
 
     /**
+     * Result-bearing variant of `fromUrl`. Use this when the caller needs to
+     * distinguish "the user gave an empty URL" from "the URL is malformed".
+     */
+    fun fromUrlResult(url: String): UrlParseResult {
+        val trimmed = url.trim()
+        if (trimmed.isEmpty()) return UrlParseResult.Empty
+
+        val withScheme = if (trimmed.contains("://")) trimmed else "https://$trimmed"
+        val uri = try {
+            URI(withScheme)
+        } catch (e: Exception) {
+            return UrlParseResult.ParseFailed("malformed URL: ${e.message ?: "could not parse"}")
+        }
+        val host = uri.host
+        if (host.isNullOrEmpty()) {
+            return UrlParseResult.ParseFailed("URL contains no host component")
+        }
+        val raw = if (uri.port > 0) "$host:${uri.port}" else host
+        return UrlParseResult.Ok(normalize(raw))
+    }
+
+    /**
      * Extracts the canonical host from a forge URL such as
      * `https://github.com/owner/repo/pull/123`. Returns the empty string if
-     * no host can be parsed.
+     * no host can be parsed. Thin wrapper over `fromUrlResult` for callers
+     * that don't need to distinguish empty input from parse failure.
      */
-    fun fromUrl(url: String): String {
-        val trimmed = url.trim()
-        if (trimmed.isEmpty()) return ""
-        val withScheme = if (trimmed.contains("://")) trimmed else "https://$trimmed"
-        val host = try {
-            URI(withScheme).host ?: return ""
-        } catch (_: Exception) {
-            return ""
-        }
-        val port = try {
-            URI(withScheme).port
-        } catch (_: Exception) {
-            -1
-        }
-        val raw = if (port > 0) "$host:$port" else host
-        return normalize(raw)
+    fun fromUrl(url: String): String = when (val r = fromUrlResult(url)) {
+        is UrlParseResult.Ok -> r.host
+        else -> ""
     }
 }

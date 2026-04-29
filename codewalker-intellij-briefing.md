@@ -163,6 +163,12 @@ scheme, no trailing slash, port only when non-default. The plugin normalises
 both before keying the `TokenStore` and before sending host-bearing RPC
 fields, so the keying matches what the server expects on the wire.
 
+URL parsing for the review URL field uses `HostNormalizer.fromUrlResult`,
+which returns a sealed result type distinguishing empty input, parse
+failure, and a successfully extracted canonical host. Empty and
+parse-failure cases are surfaced to the user before the request is made;
+they do not silently downgrade to unauthenticated mode.
+
 ### 403 / SSO error rendering
 
 `ReviewErrorFormatter.format` converts gRPC errors into user-facing strings.

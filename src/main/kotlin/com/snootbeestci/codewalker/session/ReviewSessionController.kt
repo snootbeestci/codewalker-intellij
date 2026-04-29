@@ -55,7 +55,18 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
                     else -> ExperienceLevel.EXPERIENCE_LEVEL_MID
                 }
 
-                val host = HostNormalizer.fromUrl(url)
+                val host = when (val parsed = HostNormalizer.fromUrlResult(url)) {
+                    is HostNormalizer.UrlParseResult.Ok -> parsed.host
+                    is HostNormalizer.UrlParseResult.Empty -> {
+                        withContext(Dispatchers.Main) { panel.showError("Please enter a review URL.") }
+                        return@launch
+                    }
+                    is HostNormalizer.UrlParseResult.ParseFailed -> {
+                        withContext(Dispatchers.Main) { panel.showError("Invalid URL: ${parsed.reason}") }
+                        return@launch
+                    }
+                }
+
                 val request = openReviewSessionRequest {
                     this.url = url
                     experienceLevel = expLevel
