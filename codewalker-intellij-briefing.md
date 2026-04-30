@@ -312,10 +312,20 @@ opening the working-tree copy unconditionally.
   over raw Swing equivalents — but verify the class is available on the plugin
   compilation classpath before using it. `com.intellij.ui.ComboBox` is a known
   example that is absent in IntelliJ 2025.1; use `javax.swing.JComboBox` instead.
-- Editor integration uses `FileEditorManager.openTextEditor()` to open files
-  and `editor.markupModel.addRangeHighlighter()` for transient highlights.
-  Always call `RangeHighlighter.dispose()` to clean up — never let highlights
-  accumulate across sessions.
+- Editor integration uses `FileEditorManager.openTextEditor()` for real
+  `VirtualFile`s and `editor.markupModel.addRangeHighlighter()` for
+  transient highlights. Always call `RangeHighlighter.dispose()` to clean
+  up — never let highlights accumulate across sessions.
+- For `LightVirtualFile` head-ref tabs the highlighter casts to
+  `FileEditorManagerImpl` and calls the impl-level `openFile` with
+  `FileEditorOpenOptions(reuseOpen = true, isSingletonEditorInWindow = true)`
+  — same shape as the platform's own `DiffEditorTabFilesManagerImpl`. The
+  public `openTextEditor` returns `null` on the second `LightVirtualFile`
+  open in a session, and `isSingletonEditorInWindow` requires the previous
+  singleton to be closed before opening the next, so `EditorHighlighter`
+  caches the `LightVirtualFile` per `(path, ref)` and tracks the current
+  one to close it on switch (skipping close-reopen when the new file is
+  the same instance, so highlight updates within a file don't flicker).
 - Index lookups (`FilenameIndex`, `ProjectFileIndex`, PSI traversal etc.)
   require a read action — wrap them in `ReadAction.compute { ... }` when
   called from the EDT or a coroutine, otherwise IntelliJ throws

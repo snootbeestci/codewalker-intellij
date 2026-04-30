@@ -14,6 +14,9 @@ import com.intellij.openapi.editor.markup.RangeHighlighter
 import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
+import com.intellij.openapi.fileEditor.TextEditor
+import com.intellij.openapi.fileEditor.impl.FileEditorManagerImpl
+import com.intellij.openapi.fileEditor.impl.FileEditorOpenOptions
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -49,6 +52,8 @@ class EditorHighlighter(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val contentCache = mutableMapOf<Pair<String, String>, ByteArray>()
+    private val virtualFileCache = mutableMapOf<Pair<String, String>, LightVirtualFile>()
+    private var currentLightFile: LightVirtualFile? = null
     private var boundContext: BoundContext? = null
 
     fun bind(forgeContext: ForgeContext?) {
@@ -61,6 +66,8 @@ class EditorHighlighter(
             }
         }
         contentCache.clear()
+        virtualFileCache.clear()
+        currentLightFile = null
     }
 
     fun highlightHunk(span: HunkSpan) {
@@ -218,22 +225,62 @@ class EditorHighlighter(
     }
 
     private fun openHeadRefContent(path: String, ref: String, content: ByteArray): Editor? {
-        val fileName = path.substringAfterLast('/')
-        val displayName = "$fileName @ ${ref.take(7)}"
-        val virtualFile = LightVirtualFile(
-            displayName,
-            FileTypeManager.getInstance().getFileTypeByFileName(fileName),
-            String(content, Charsets.UTF_8),
-        ).apply {
-            isWritable = false
+        val key = path to ref
+
+        // Reuse the same LightVirtualFile identity for repeat navigation to
+        // the same (path, ref). reuseOpen below matches files by .equals,
+        // so caching the file makes repeat clicks land on the same tab
+        // instead of opening a new one.
+        val virtualFile = virtualFileCache.getOrPut(key) {
+            val fileName = path.substringAfterLast('/')
+            val displayName = "$fileName @ ${ref.take(7)}"
+            LightVirtualFile(
+                displayName,
+                FileTypeManager.getInstance().getFileTypeByFileName(fileName),
+                String(content, Charsets.UTF_8),
+            ).apply {
+                isWritable = false
+            }
         }
-        val descriptor = OpenFileDescriptor(project, virtualFile)
-        return FileEditorManager.getInstance(project).openTextEditor(descriptor, true)
+
+        val manager = FileEditorManager.getInstance(project) as FileEditorManagerImpl
+
+        // isSingletonEditorInWindow allows only one singleton tab per window.
+        // Close the previous one before opening a new one, otherwise openFile
+        // returns FileEditorComposite.EMPTY because the slot is occupied.
+        // The previous != virtualFile guard handles same-file re-navigation
+        // (different hunks within one file) — don't close-and-reopen, let
+        // reuseOpen reselect the existing tab.
+        val previous = currentLightFile
+        if (previous != null && previous != virtualFile) {
+            manager.closeFile(previous)
+        }
+        currentLightFile = virtualFile
+
+        // Cast to FileEditorManagerImpl to access the impl-level openFile
+        // overload. This is the same call shape the platform's own diff
+        // viewer (DiffEditorTabFilesManagerImpl.showDiffFile) uses for
+        // non-physical files. The public FileEditorManager.openTextEditor
+        // returns null on the second LightVirtualFile open in the same
+        // session.
+        val composite = manager.openFile(
+            file = virtualFile,
+            window = null,
+            options = FileEditorOpenOptions(
+                reuseOpen = true,
+                isSingletonEditorInWindow = true,
+                requestFocus = false,
+            ),
+        )
+
+        return composite.allEditors.filterIsInstance<TextEditor>().firstOrNull()?.editor
     }
 
     override fun dispose() {
         scope.cancel()
         contentCache.clear()
+        virtualFileCache.clear()
+        currentLightFile = null
         clearHighlight()
     }
 
