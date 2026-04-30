@@ -3,7 +3,6 @@ package com.snootbeestci.codewalker.editor
 import codewalker.v1.Codewalker.ForgeContext
 import codewalker.v1.Codewalker.HunkSpan
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
@@ -233,27 +232,25 @@ class EditorHighlighter(
                 isWritable = false
             }
         }
-        val descriptor = OpenFileDescriptor(project, virtualFile)
         val manager = FileEditorManager.getInstance(project)
 
-        // Open synchronously without focus to avoid the LightVirtualFile race
-        // where openTextEditor tries to focus a not-yet-fully-constructed editor.
-        val editor = manager.openTextEditor(descriptor, false)
+        // openFile reliably handles repeat opens of LightVirtualFile where
+        // openTextEditor returns null after the first one.
+        manager.openFile(virtualFile, /* focusEditor = */ false, /* searchForOpen = */ true)
 
-        // Bring the tab to the foreground on the next EDT cycle. By that point
-        // the editor's preferredFocusedComponent is wired up. We pass
-        // focusEditor = false because we only want tab selection, not
-        // inner-component focus (which is what races on LightVirtualFile).
-        ApplicationManager.getApplication().invokeLater {
-            manager.openFile(virtualFile, /* focusEditor = */ false, /* searchForOpen = */ true)
-        }
+        // Explicitly select the tab — openFile alone doesn't always bring it
+        // to the foreground when another file is currently selected.
+        manager.setSelectedEditor(virtualFile, "text-editor")
 
         log.info(
             "Codewalker: opened head-ref tab for $path; selected file is " +
                 "${manager.selectedFiles.firstOrNull()?.name}"
         )
 
-        return editor
+        // Fetch the editor instance for highlighting. By this point the tab
+        // is selected and the underlying TextEditor is available.
+        return (manager.getSelectedEditor(virtualFile) as? com.intellij.openapi.fileEditor.TextEditor)
+            ?.editor
     }
 
     override fun dispose() {
