@@ -3,6 +3,7 @@ package com.snootbeestci.codewalker.editor
 import codewalker.v1.Codewalker.ForgeContext
 import codewalker.v1.Codewalker.HunkSpan
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
@@ -223,6 +224,11 @@ class EditorHighlighter(
 
     private fun openHeadRefContent(path: String, ref: String, content: ByteArray): Editor? {
         val key = path to ref
+
+        // Reuse the same LightVirtualFile identity for repeat navigation to
+        // the same (path, ref). IntelliJ tracks open tabs by file identity,
+        // so a fresh LightVirtualFile every call would produce duplicate
+        // tabs.
         val virtualFile = virtualFileCache.getOrPut(key) {
             val fileName = path.substringAfterLast('/')
             val displayName = "$fileName @ ${ref.take(7)}"
@@ -234,24 +240,42 @@ class EditorHighlighter(
                 isWritable = false
             }
         }
+
         val manager = FileEditorManager.getInstance(project)
 
-        // Close the previously-opened Codewalker tab if it's different from
-        // the one we're about to open. IntelliJ's editor manager has issues
-        // switching tabs between LightVirtualFiles via openTextEditor /
-        // openFile / setSelectedEditor; closing the old one first sidesteps
-        // the issue.
+        // Close the previously-opened Codewalker tab if it's a different
+        // file. IntelliJ's editor manager refuses to switch tabs between
+        // LightVirtualFiles via openTextEditor / openFile /
+        // setSelectedEditor; explicitly closing the old tab sidesteps the
+        // issue.
         val previous = currentLightFile
         if (previous != null && previous != virtualFile) {
             manager.closeFile(previous)
         }
         currentLightFile = virtualFile
 
+        // Open without requesting focus to avoid a race where IntelliJ
+        // tries to focus a LightVirtualFile editor whose
+        // preferredFocusedComponent hasn't been wired up yet (produces
+        // "preferredFocusedComponent is null" warnings and returns null
+        // from openTextEditor).
         val descriptor = OpenFileDescriptor(project, virtualFile)
-        val editor = manager.openTextEditor(descriptor, true)
+        val editor = manager.openTextEditor(descriptor, /* requestFocus = */ false)
+
+        // Bring the tab to the foreground on the next EDT cycle, by which
+        // point the editor is fully constructed. setSelectedEditor with
+        // the text-editor provider id is the documented way to select a
+        // tab without focusing the inner editor component.
+        ApplicationManager.getApplication().invokeLater {
+            manager.setSelectedEditor(virtualFile, "text-editor")
+            log.info(
+                "Codewalker: deferred selection — selected file is " +
+                    "${manager.selectedFiles.firstOrNull()?.name}"
+            )
+        }
 
         log.info(
-            "Codewalker: opened head-ref tab for $path; selected file is " +
+            "Codewalker: opened head-ref tab for $path; immediate selection is " +
                 "${manager.selectedFiles.firstOrNull()?.name}"
         )
 
