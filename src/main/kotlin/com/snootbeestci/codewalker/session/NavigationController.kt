@@ -6,6 +6,7 @@ import codewalker.v1.Codewalker.Step
 import codewalker.v1.navigateRequest
 import com.snootbeestci.codewalker.grpc.CodewalkerClient
 import com.snootbeestci.codewalker.toolwindow.SessionPanel
+import com.snootbeestci.codewalker.toolwindow.displayOrderedSteps
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,14 +50,21 @@ class NavigationController(
         })
     }
 
+    private fun orderedSteps(): List<Step> {
+        val files = controller.forgeContext?.filesList.orEmpty()
+        return displayOrderedSteps(controller.steps, files)
+    }
+
     private fun findNextStep(): Step? {
-        val currentIdx = controller.steps.indexOfFirst { it.id == controller.currentStepId }
-        return controller.steps.getOrNull(currentIdx + 1)
+        val ordered = orderedSteps()
+        val currentIdx = ordered.indexOfFirst { it.id == controller.currentStepId }
+        return ordered.getOrNull(currentIdx + 1)
     }
 
     private fun findPreviousStep(): Step? {
-        val currentIdx = controller.steps.indexOfFirst { it.id == controller.currentStepId }
-        return controller.steps.getOrNull(currentIdx - 1)
+        val ordered = orderedSteps()
+        val currentIdx = ordered.indexOfFirst { it.id == controller.currentStepId }
+        return ordered.getOrNull(currentIdx - 1)
     }
 
     private fun navigate(request: NavigateRequest) {
