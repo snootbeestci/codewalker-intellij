@@ -1,6 +1,7 @@
 package com.snootbeestci.codewalker.toolwindow
 
 import codewalker.v1.Codewalker.EdgeLabel
+import codewalker.v1.Codewalker.ReviewFile
 import codewalker.v1.Codewalker.Step
 import codewalker.v1.Codewalker.StepComplete
 import com.intellij.openapi.Disposable
@@ -29,6 +30,63 @@ import javax.swing.JPanel
 import javax.swing.JTextPane
 import javax.swing.ListSelectionModel
 import javax.swing.SwingConstants
+
+internal sealed class StepListItem {
+    data class Subtitle(val text: String) : StepListItem()
+    data class Header(val filePath: String) : StepListItem()
+    data class StepRow(val stepId: String, val label: String) : StepListItem()
+}
+
+internal fun orderStepsByFile(
+    steps: List<Step>,
+    files: List<ReviewFile>,
+): List<Pair<String, List<Step>>> {
+    val stepsByFile = steps.groupBy { it.hunkSpan.filePath }
+    return files
+        .map { file ->
+            file.filePath to stepsByFile[file.filePath].orEmpty()
+                .sortedBy { it.hunkSpan.newStart }
+        }
+        .filter { it.second.isNotEmpty() }
+}
+
+internal fun displayOrderedSteps(steps: List<Step>, files: List<ReviewFile>): List<Step> =
+    orderStepsByFile(steps, files).flatMap { it.second }
+
+internal fun orphanedStepPaths(steps: List<Step>, files: List<ReviewFile>): Set<String> {
+    val filePaths = files.map { it.filePath }.toSet()
+    return steps.map { it.hunkSpan.filePath }.toSet() - filePaths
+}
+
+internal fun buildStepListItems(
+    steps: List<Step>,
+    files: List<ReviewFile>,
+): List<StepListItem> {
+    val grouped = orderStepsByFile(steps, files)
+    if (grouped.isEmpty()) return emptyList()
+
+    val items = mutableListOf<StepListItem>()
+    val prefix = longestCommonDirectoryPrefix(grouped.map { it.first })
+    if (prefix.isNotEmpty()) {
+        items.add(StepListItem.Subtitle(prefix))
+    }
+    for ((path, fileSteps) in grouped) {
+        val displayPath = if (prefix.isNotEmpty() && path.startsWith(prefix)) {
+            path.removePrefix(prefix)
+        } else {
+            path
+        }
+        items.add(StepListItem.Header(displayPath))
+        fileSteps.forEachIndexed { index, step ->
+            val span = step.hunkSpan
+            val end = span.newStart + maxOf(span.newLines, 1) - 1
+            val rangeLabel = "${span.newStart}–$end"
+            val label = step.label.ifEmpty { "Hunk ${index + 1} (lines $rangeLabel)" }
+            items.add(StepListItem.StepRow(step.id, label))
+        }
+    }
+    return items
+}
 
 internal fun longestCommonDirectoryPrefix(paths: List<String>): String {
     if (paths.isEmpty()) return ""
@@ -183,7 +241,7 @@ class SessionPanel(
         highlighter.bind(controller.forgeContext)
         updateLanguageBadge(controller)
         updateLevelPips(controller.effectiveLevel)
-        populateStepList(controller.steps)
+        populateStepList(controller.steps, controller.forgeContext?.filesList.orEmpty())
         updateBreadcrumb(listOf(controller.forgeContext?.prTitle?.takeIf { it.isNotEmpty() } ?: "Review"))
         clearNarration()
         backButton.isEnabled = false
@@ -244,34 +302,16 @@ class SessionPanel(
         }
     }
 
-    private fun populateStepList(steps: List<Step>) {
+    private fun populateStepList(steps: List<Step>, files: List<ReviewFile>) {
         stepListModel.clear()
-        val grouped = LinkedHashMap<String, MutableList<Step>>()
-        for (step in steps) {
-            val path = step.hunkSpan.filePath
-            if (path.isEmpty()) {
-                log.warn("Hunk step has empty filePath: id=${step.id}")
-            }
-            grouped.getOrPut(path.ifEmpty { "(unknown)" }) { mutableListOf() }.add(step)
+        val orphaned = orphanedStepPaths(steps, files)
+        if (orphaned.isNotEmpty()) {
+            log.warn(
+                "Codewalker: ${orphaned.size} step(s) reference files not in forge_context: $orphaned"
+            )
         }
-        val prefix = longestCommonDirectoryPrefix(grouped.keys.toList())
-        if (prefix.isNotEmpty()) {
-            stepListModel.addElement(StepListItem.Subtitle(prefix))
-        }
-        for ((path, fileSteps) in grouped) {
-            val displayPath = if (prefix.isNotEmpty() && path.startsWith(prefix)) {
-                path.removePrefix(prefix)
-            } else {
-                path
-            }
-            stepListModel.addElement(StepListItem.Header(displayPath))
-            fileSteps.forEachIndexed { index, step ->
-                val span = step.hunkSpan
-                val end = span.newStart + maxOf(span.newLines, 1) - 1
-                val rangeLabel = "${span.newStart}–$end"
-                val label = step.label.ifEmpty { "Hunk ${index + 1} (lines $rangeLabel)" }
-                stepListModel.addElement(StepListItem.StepRow(step.id, label))
-            }
+        for (item in buildStepListItems(steps, files)) {
+            stepListModel.addElement(item)
         }
     }
 
@@ -284,12 +324,6 @@ class SessionPanel(
     private fun updateLevelPips(level: Int) {
         val capped = level.coerceIn(0, MAX_LEVEL)
         levelLabel.text = "●".repeat(capped) + "○".repeat(MAX_LEVEL - capped)
-    }
-
-    private sealed class StepListItem {
-        data class Subtitle(val text: String) : StepListItem()
-        data class Header(val filePath: String) : StepListItem()
-        data class StepRow(val stepId: String, val label: String) : StepListItem()
     }
 
     private class StepListRenderer : javax.swing.ListCellRenderer<StepListItem> {

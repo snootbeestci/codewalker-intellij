@@ -129,6 +129,21 @@ when `complete.hasSummary()` is true, otherwise passes `null` (which clears
 the table). `SessionPanel.clearNarration` clears both the narration pane
 and the summary table.
 
+The file/step list is built by joining `ReviewReady.forge_context.files`
+(canonical file order, deterministic, aligned with backend Forward
+navigation) with `ReviewReady.steps` (grouped by `hunk_span.file_path`,
+sorted within each file by `hunk_span.new_start`). The plugin does not
+rely on the wire order of `ReviewReady.steps` for display purposes —
+that field's order is treated as unspecified, even though the current
+backend emits it in Forward order as of v0.6.1. Steps whose
+`hunk_span.file_path` is not present in `forge_context.files` are
+dropped from the rendered list and logged as orphans.
+
+`NavigationController.findNextStep` / `findPreviousStep` walk the same
+display order rather than the wire order of `controller.steps`, so the
+pre-fetch highlight always lands on the file the backend's Forward RPC
+will actually open next.
+
 The summary table colour-codes three signal fields:
 
 - `breaking` — green (No), red (Yes)
@@ -325,6 +340,10 @@ opening the working-tree copy unconditionally.
   via `Disposer.register(parent, child)` so cancellation cascades
   automatically — manual `child.dispose()` calls in a parent's
   `dispose()` are a code smell.
+- Display order of repeated proto fields is the server's choice. Plugin
+  code that needs a specific order constructs it locally from structured
+  fields (file lists, line numbers) rather than depending on the wire
+  order of unstructured `repeated` fields.
 
 ### Build
 - `./gradlew runIde` — launches a sandboxed IDE with the plugin installed
