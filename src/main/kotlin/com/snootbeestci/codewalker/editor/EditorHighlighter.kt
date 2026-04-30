@@ -50,6 +50,7 @@ class EditorHighlighter(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val contentCache = mutableMapOf<Pair<String, String>, ByteArray>()
     private val virtualFileCache = mutableMapOf<Pair<String, String>, LightVirtualFile>()
+    private var currentLightFile: LightVirtualFile? = null
     private var boundContext: BoundContext? = null
 
     fun bind(forgeContext: ForgeContext?) {
@@ -63,6 +64,7 @@ class EditorHighlighter(
         }
         contentCache.clear()
         virtualFileCache.clear()
+        currentLightFile = null
     }
 
     fun highlightHunk(span: HunkSpan) {
@@ -234,29 +236,33 @@ class EditorHighlighter(
         }
         val manager = FileEditorManager.getInstance(project)
 
-        // openFile reliably handles repeat opens of LightVirtualFile where
-        // openTextEditor returns null after the first one.
-        manager.openFile(virtualFile, /* focusEditor = */ false, /* searchForOpen = */ true)
+        // Close the previously-opened Codewalker tab if it's different from
+        // the one we're about to open. IntelliJ's editor manager has issues
+        // switching tabs between LightVirtualFiles via openTextEditor /
+        // openFile / setSelectedEditor; closing the old one first sidesteps
+        // the issue.
+        val previous = currentLightFile
+        if (previous != null && previous != virtualFile) {
+            manager.closeFile(previous)
+        }
+        currentLightFile = virtualFile
 
-        // Explicitly select the tab — openFile alone doesn't always bring it
-        // to the foreground when another file is currently selected.
-        manager.setSelectedEditor(virtualFile, "text-editor")
+        val descriptor = OpenFileDescriptor(project, virtualFile)
+        val editor = manager.openTextEditor(descriptor, true)
 
         log.info(
             "Codewalker: opened head-ref tab for $path; selected file is " +
                 "${manager.selectedFiles.firstOrNull()?.name}"
         )
 
-        // Fetch the editor instance for highlighting. By this point the tab
-        // is selected and the underlying TextEditor is available.
-        return (manager.getSelectedEditor(virtualFile) as? com.intellij.openapi.fileEditor.TextEditor)
-            ?.editor
+        return editor
     }
 
     override fun dispose() {
         scope.cancel()
         contentCache.clear()
         virtualFileCache.clear()
+        currentLightFile = null
         clearHighlight()
     }
 
