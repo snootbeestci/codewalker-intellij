@@ -8,6 +8,9 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.ScrollType
+import com.intellij.openapi.editor.event.EditorMouseEvent
+import com.intellij.openapi.editor.event.EditorMouseEventArea
+import com.intellij.openapi.editor.event.EditorMouseListener
 import com.intellij.openapi.editor.markup.HighlighterLayer
 import com.intellij.openapi.editor.markup.HighlighterTargetArea
 import com.intellij.openapi.editor.markup.RangeHighlighter
@@ -16,12 +19,15 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.popup.JBPopup
+import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.testFramework.LightVirtualFile
 import com.intellij.ui.JBColor
+import com.intellij.ui.components.JBScrollPane
 import com.snootbeestci.codewalker.forge.HostNormalizer
 import com.snootbeestci.codewalker.forge.TokenStore
 import com.snootbeestci.codewalker.grpc.CodewalkerClient
@@ -36,6 +42,11 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.Color
+import java.awt.Dimension
+import java.awt.Font
+import java.awt.Point
+import java.awt.event.MouseEvent
+import javax.swing.JTextArea
 
 class EditorHighlighter(
     private val project: Project,
@@ -46,6 +57,9 @@ class EditorHighlighter(
 
     private var currentHighlighters: List<RangeHighlighter> = emptyList()
     private var currentEditor: Editor? = null
+    private var clickListener: EditorMouseListener? = null
+    private var activePopup: JBPopup? = null
+    private var currentRawDiff: String = ""
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val contentCache = mutableMapOf<Pair<String, String>, ByteArray>()
@@ -157,6 +171,7 @@ class EditorHighlighter(
     private fun applyHighlightRanges(editor: Editor, span: HunkSpan) {
         val document = editor.document
         val ranges = computeAddedLineRanges(span.rawDiff, span.newStart)
+        currentRawDiff = span.rawDiff
 
         val attributes = TextAttributes().apply {
             backgroundColor = JBColor(
@@ -188,12 +203,87 @@ class EditorHighlighter(
             LogicalPosition(scrollLine, 0),
             ScrollType.CENTER
         )
+
+        attachClickListener(editor)
+    }
+
+    private fun attachClickListener(editor: Editor) {
+        val listener = object : EditorMouseListener {
+            override fun mouseClicked(e: EditorMouseEvent) {
+                val mouseEvent = e.mouseEvent
+                if (mouseEvent.button != MouseEvent.BUTTON1) return
+                if (mouseEvent.modifiersEx and (
+                    MouseEvent.SHIFT_DOWN_MASK or
+                        MouseEvent.CTRL_DOWN_MASK or
+                        MouseEvent.ALT_DOWN_MASK or
+                        MouseEvent.META_DOWN_MASK
+                    ) != 0) return
+                if (e.area != EditorMouseEventArea.EDITING_AREA) return
+
+                val clickedLine = editor.xyToLogicalPosition(mouseEvent.point).line
+                if (!isLineHighlighted(clickedLine)) {
+                    activePopup?.cancel()
+                    activePopup = null
+                    return
+                }
+
+                if (activePopup?.isVisible == true) {
+                    activePopup?.cancel()
+                    activePopup = null
+                    return
+                }
+
+                showDiffPopup(editor, mouseEvent.locationOnScreen)
+            }
+        }
+        editor.addEditorMouseListener(listener)
+        clickListener = listener
+    }
+
+    private fun isLineHighlighted(line: Int): Boolean {
+        val editor = currentEditor ?: return false
+        return currentHighlighters.any { highlighter ->
+            val startLine = editor.document.getLineNumber(highlighter.startOffset)
+            val endLine = editor.document.getLineNumber(highlighter.endOffset)
+            line in startLine..endLine
+        }
+    }
+
+    private fun showDiffPopup(editor: Editor, screenLocation: Point) {
+        if (currentRawDiff.isEmpty()) return
+
+        val textArea = JTextArea(currentRawDiff).apply {
+            font = Font(Font.MONOSPACED, Font.PLAIN, 12)
+            isEditable = false
+            lineWrap = false
+        }
+        val scrollPane = JBScrollPane(textArea).apply {
+            preferredSize = Dimension(600, 300)
+        }
+
+        val popup = JBPopupFactory.getInstance()
+            .createComponentPopupBuilder(scrollPane, textArea)
+            .setRequestFocus(false)
+            .setFocusable(false)
+            .setMovable(true)
+            .setResizable(true)
+            .setCancelOnClickOutside(true)
+            .setCancelOnOtherWindowOpen(true)
+            .createPopup()
+
+        popup.showInScreenCoordinates(editor.component, screenLocation)
+        activePopup = popup
     }
 
     fun clearHighlight() {
+        activePopup?.cancel()
+        activePopup = null
+        clickListener?.let { l -> currentEditor?.removeEditorMouseListener(l) }
+        clickListener = null
         currentHighlighters.forEach { it.dispose() }
         currentHighlighters = emptyList()
         currentEditor = null
+        currentRawDiff = ""
     }
 
     private fun findWorkingTreeFile(filePath: String): VirtualFile? {
