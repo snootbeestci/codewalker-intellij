@@ -4,6 +4,7 @@ import codewalker.v1.Codewalker.HunkSpan
 import codewalker.v1.Codewalker.ReviewFile
 import codewalker.v1.Codewalker.Step
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -212,6 +213,78 @@ class SessionPanelTest {
             )
         )
     }
+
+    @Test
+    fun `label shows first and last added line, not hunk header range`() {
+        val rawDiff = """
+            @@ -12,7 +12,8 @@
+             context line 12
+             context line 13
+             context line 14
+            +added line 15
+             context line 16
+             context line 17
+             context line 18
+        """.trimIndent()
+        val step = stepWithDiff("hunk:foo.kt:12", "foo.kt", newStart = 12, newLines = 8, rawDiff = rawDiff)
+        val items = buildStepListItems(listOf(step), listOf(file("foo.kt")))
+
+        val row = items.filterIsInstance<StepListItem.StepRow>().single()
+        assertTrue(row.label.contains("15"), "label should mention line 15: ${row.label}")
+        assertFalse(row.label.contains("12–"), "label should not show header start: ${row.label}")
+    }
+
+    @Test
+    fun `single-line addition uses single line number, not range`() {
+        val rawDiff = """
+            @@ -10,3 +10,4 @@
+             context
+            +new
+             context
+             context
+        """.trimIndent()
+        val step = stepWithDiff("hunk:foo.kt:10", "foo.kt", newStart = 10, newLines = 4, rawDiff = rawDiff)
+        val items = buildStepListItems(listOf(step), listOf(file("foo.kt")))
+
+        val row = items.filterIsInstance<StepListItem.StepRow>().single()
+        assertTrue(row.label.contains("line 11") || row.label.contains("lines 11"), "label: ${row.label}")
+    }
+
+    @Test
+    fun `removal only hunk falls back to header range`() {
+        val rawDiff = """
+            @@ -10,5 +10,4 @@
+             context
+            -removed
+             context
+             context
+             context
+        """.trimIndent()
+        val step = stepWithDiff("hunk:foo.kt:10", "foo.kt", newStart = 10, newLines = 4, rawDiff = rawDiff)
+        val items = buildStepListItems(listOf(step), listOf(file("foo.kt")))
+
+        val row = items.filterIsInstance<StepListItem.StepRow>().single()
+        assertTrue(row.label.contains("10"), "label: ${row.label}")
+    }
+
+    private fun stepWithDiff(
+        id: String,
+        filePath: String,
+        newStart: Int,
+        newLines: Int,
+        rawDiff: String,
+    ): Step =
+        Step.newBuilder()
+            .setId(id)
+            .setHunkSpan(
+                HunkSpan.newBuilder()
+                    .setFilePath(filePath)
+                    .setNewStart(newStart)
+                    .setNewLines(newLines)
+                    .setRawDiff(rawDiff)
+                    .build()
+            )
+            .build()
 
     @Test
     fun `directory boundary is respected not character boundary`() {
