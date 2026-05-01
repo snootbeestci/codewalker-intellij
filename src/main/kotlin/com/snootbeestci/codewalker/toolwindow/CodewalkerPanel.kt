@@ -10,7 +10,7 @@ import com.snootbeestci.codewalker.session.ReviewSessionController
 import java.awt.CardLayout
 import javax.swing.JPanel
 
-class CodewalkerPanel(project: Project) : Disposable {
+class CodewalkerPanel(val project: Project) : Disposable {
 
     val root: JPanel = JPanel(CardLayout())
 

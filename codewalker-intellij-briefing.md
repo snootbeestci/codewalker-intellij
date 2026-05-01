@@ -272,38 +272,55 @@ path elsewhere in the plugin — host parsing lives in one place.
 
 ## Review session file display
 
-Review session highlights are applied against the PR's head-ref content,
-not the working-tree copy. The plugin fetches file content via the
-backend's `FetchFileAtRef` RPC, which wraps the same forge handler used
-by session opening.
+When a review session starts, the plugin checks out the PR's head branch
+in the user's working tree. All files opened during the session are real
+`VirtualFile`s aligned with the diff — full IDE features (Find Usages,
+run configs, navigation) work as normal.
 
-Resolution order:
+Session-start flow (in `ReviewSessionController.openReview`, after the
+backend's `OpenReviewSession` returns `ReviewReady` and before the panel
+is switched to the session card):
 
-1. Fetch the head-ref content (cached per session, keyed by path+ref)
-2. If the working-tree copy exists and is byte-equal, open the real
-   `VirtualFile` — preserves IDE features like Find Usages and run
-   configurations
-3. Otherwise open a read-only `LightVirtualFile` named
-   `<filename> @ <short-ref>` showing the head-ref content
+1. If the working tree is dirty, show a Stash/Cancel modal
+   (`DirtyTreeDialog`). Cancel aborts the session; Stash creates a
+   tagged stash and proceeds.
+2. Fetch from `origin` via a `GitLineHandler` invocation of
+   `git fetch origin` (origin only — fork PRs are not supported in
+   this version and surface a clear "branch not on origin" error).
+3. Check out the branch via `GitBrancher.checkout(branch, false, repos)`
+   — branch checkout, not detached HEAD.
+4. Switch the tool window to the session card and start narration.
 
-This matches the diff's line numbers to the displayed content
-unconditionally. Working-tree drift no longer produces silent
-misalignment.
+Stash entries are tagged `codewalker-<sessionTag>` so they can be
+distinguished from user-created stashes. On every session start the
+plugin scans for codewalker-tagged stashes via `git stash list` and
+logs a warning (informational only) listing any leftovers from
+sessions that did not clean up. Automatic restoration is tracked
+separately.
 
-Fetch failures fall back to the working-tree copy with a user-visible
-status message; the user is never silently shown the wrong content.
-`NOT_FOUND` from the backend is treated as "file genuinely doesn't
-exist at the head ref" — no fallback, the highlight is cleared and
-the user is notified.
+Concurrent sessions are not supported in this version; the plugin
+refuses a second `openReview` call while one is active via an
+`AtomicBoolean` on the controller. This is a stopgap until proper
+session lifecycle exists.
 
-`EditorHighlighter` owns its own `CoroutineScope` (IO dispatcher,
-`SupervisorJob`) and is registered via `Disposer.register(parent, child)`
-from `SessionPanel`. The scope is cancelled and the per-session content
-cache cleared on dispose. `SessionPanel.bind` calls `highlighter.bind`
-with the active session's `ForgeContext` so the highlighter can resolve
-`(host, owner, repo, headRef)` for `FetchFileAtRef` calls. Without a
-bound context the highlighter logs and returns — it never falls back to
-opening the working-tree copy unconditionally.
+All git operations are wrapped in `CodewalkerGitOps`
+(project-scoped). Operations are exposed as plain or `suspend`
+functions over Git4Idea APIs: `GitRepositoryManager` and
+`ChangeListManager` for dirty detection, `GitBrancher` for the
+checkout (wrapped in `suspendCancellableCoroutine` so the suspend
+function resumes when the AWT-later callback fires), and
+`GitLineHandler` invoked through `Git.getInstance().runCommand` for
+`stash push`, `stash list`, and `fetch origin`. Failures throw
+`GitOperationException`, which the controller surfaces verbatim to
+the user.
+
+The legacy `EditorHighlighter` `FetchFileAtRef`-based fallback (head-ref
+content fetched over gRPC and rendered in a `LightVirtualFile` when the
+working tree was out of sync) is no longer the primary path — once the
+PR branch is checked out, the working-tree copy will match by
+construction. The highlighter retains the fetch-and-compare logic as a
+safety net for projects without a git repository or when checkout was
+skipped.
 
 ---
 
@@ -344,6 +361,13 @@ opening the working-tree copy unconditionally.
   code that needs a specific order constructs it locally from structured
   fields (file lists, line numbers) rather than depending on the wire
   order of unstructured `repeated` fields.
+- Use Git4Idea APIs for all git operations. Don't shell out to `git`
+  directly via `ProcessBuilder`/`Runtime.exec`. Operations needed today
+  (dirty detection, stash save, branch fetch, branch checkout, stash
+  list) are reachable via `GitRepositoryManager`, `ChangeListManager`,
+  `GitBrancher`, and `GitLineHandler` invoked through
+  `Git.getInstance().runCommand`. All git operations belong in
+  `CodewalkerGitOps` rather than being scattered across controllers.
 
 ### Build
 - `./gradlew runIde` — launches a sandboxed IDE with the plugin installed
