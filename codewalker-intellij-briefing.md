@@ -8,6 +8,13 @@ For decisions about the backend (proto contract, session model, forge
 extensibility, LLM provider), refer to the backend briefing:
 https://github.com/snootbeestci/codewalker/blob/main/codewalker-briefing.md
 
+yet more changes for testing
+This one is a multiline change
+
+with a space in it.
+
+or two.
+
 ---
 
 ## What this is
