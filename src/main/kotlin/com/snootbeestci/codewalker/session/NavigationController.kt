@@ -83,6 +83,9 @@ class NavigationController(
                         event.hasToken() -> withContext(Dispatchers.Main) {
                             panel.appendNarrationToken(event.token.text)
                         }
+                        event.hasSummaryReady() -> withContext(Dispatchers.Main) {
+                            panel.onSummaryReady(event.summaryReady.summary)
+                        }
                         event.hasComplete() -> withContext(Dispatchers.Main) {
                             panel.onStepComplete(event.complete)
                         }

@@ -4,6 +4,7 @@ import codewalker.v1.Codewalker.EdgeLabel
 import codewalker.v1.Codewalker.ReviewFile
 import codewalker.v1.Codewalker.Step
 import codewalker.v1.Codewalker.StepComplete
+import codewalker.v1.Codewalker.StepSummary
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
@@ -265,6 +266,10 @@ class SessionPanel(
         val doc = narrationPane.document
         doc.insertString(doc.length, text, null)
         narrationPane.caretPosition = doc.length
+    }
+
+    fun onSummaryReady(summary: StepSummary) {
+        summaryTable.update(summary)
     }
 
     fun onStepComplete(complete: StepComplete) {
