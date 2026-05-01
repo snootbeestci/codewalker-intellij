@@ -55,9 +55,8 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
         panel.idlePanel.clearError()
         panel.showLoading()
 
-        warnAboutLeftoverStashes()
-
         sessionJob = scope.launch {
+            warnAboutLeftoverStashes()
             var sessionStarted = false
             try {
                 // Working-tree prep happens first. If the user cancels or
