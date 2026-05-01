@@ -80,9 +80,19 @@ internal fun buildStepListItems(
         items.add(StepListItem.Header(displayPath))
         fileSteps.forEachIndexed { index, step ->
             val span = step.hunkSpan
-            val end = span.newStart + maxOf(span.newLines, 1) - 1
-            val rangeLabel = "${span.newStart}–$end"
-            val label = step.label.ifEmpty { "Hunk ${index + 1} (lines $rangeLabel)" }
+            val ranges = EditorHighlighter.computeAddedLineRanges(span.rawDiff, span.newStart)
+            val label = if (ranges.isEmpty()) {
+                val end = span.newStart + maxOf(span.newLines, 1) - 1
+                "lines ${span.newStart}–$end"
+            } else {
+                val firstAddedLine = ranges.first().first
+                val lastAddedLine = ranges.last().last
+                if (firstAddedLine == lastAddedLine) {
+                    "line $firstAddedLine"
+                } else {
+                    "lines $firstAddedLine–$lastAddedLine"
+                }
+            }
             items.add(StepListItem.StepRow(step.id, label))
         }
     }

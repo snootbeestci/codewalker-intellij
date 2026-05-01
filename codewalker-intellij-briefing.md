@@ -149,6 +149,15 @@ spinner is an `AsyncProcessIcon` whose animation lifecycle is driven
 by component visibility via `CardLayout`, so no manual start/stop is
 required.
 
+Step labels show the line range of the actual added content, not the
+hunk header's range. The unified-diff hunk header conventionally
+includes three context lines above the change, so its `newStart` value
+points at context, not at the change itself. The plugin walks the
+hunk's raw diff via `EditorHighlighter.computeAddedLineRanges` to find
+the first and last added (`+`) line, and shows those in the label.
+For removal-only hunks (no added lines), the label falls back to the
+header's range.
+
 The file/step list is built by joining `ReviewReady.forge_context.files`
 (canonical file order, deterministic, aligned with backend Forward
 navigation) with `ReviewReady.steps` (grouped by `hunk_span.file_path`,
