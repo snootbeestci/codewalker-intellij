@@ -12,6 +12,7 @@ import com.intellij.openapi.editor.ScrollType
 import com.intellij.openapi.editor.event.EditorMouseEvent
 import com.intellij.openapi.editor.event.EditorMouseEventArea
 import com.intellij.openapi.editor.event.EditorMouseListener
+import com.intellij.openapi.editor.event.EditorMouseMotionListener
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.editor.highlighter.EditorHighlighterFactory
 import com.intellij.openapi.editor.markup.HighlighterLayer
@@ -45,6 +46,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.Color
+import java.awt.Cursor
 import java.awt.Dimension
 import java.awt.Point
 import java.awt.event.MouseEvent
@@ -59,6 +61,7 @@ class EditorHighlighter(
     private var currentHighlighters: List<RangeHighlighter> = emptyList()
     private var currentEditor: Editor? = null
     private var clickListener: EditorMouseListener? = null
+    private var motionListener: EditorMouseMotionListener? = null
     private var activePopup: JBPopup? = null
     private var currentRawDiff: String = ""
 
@@ -206,6 +209,23 @@ class EditorHighlighter(
         )
 
         attachClickListener(editor)
+        attachCursorListener(editor)
+    }
+
+    private fun attachCursorListener(editor: Editor) {
+        if (editor !is EditorEx) return
+        val listener = object : EditorMouseMotionListener {
+            override fun mouseMoved(e: EditorMouseEvent) {
+                val overHighlight = e.area == EditorMouseEventArea.EDITING_AREA &&
+                    isLineHighlighted(editor.xyToLogicalPosition(e.mouseEvent.point).line)
+                editor.setCustomCursor(
+                    this@EditorHighlighter,
+                    if (overHighlight) Cursor.getDefaultCursor() else null,
+                )
+            }
+        }
+        editor.addEditorMouseMotionListener(listener)
+        motionListener = listener
     }
 
     private fun attachClickListener(editor: Editor) {
@@ -298,6 +318,9 @@ class EditorHighlighter(
         activePopup = null
         clickListener?.let { l -> currentEditor?.removeEditorMouseListener(l) }
         clickListener = null
+        motionListener?.let { l -> currentEditor?.removeEditorMouseMotionListener(l) }
+        motionListener = null
+        (currentEditor as? EditorEx)?.setCustomCursor(this, null)
         currentHighlighters.forEach { it.dispose() }
         currentHighlighters = emptyList()
         currentEditor = null
