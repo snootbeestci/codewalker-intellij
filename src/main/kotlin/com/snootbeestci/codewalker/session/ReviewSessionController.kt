@@ -3,6 +3,7 @@ package com.snootbeestci.codewalker.session
 import codewalker.v1.Codewalker.ExperienceLevel
 import codewalker.v1.Codewalker.ForgeContext
 import codewalker.v1.Codewalker.GlossaryTerm
+import codewalker.v1.Codewalker.PullRequestSummary
 import codewalker.v1.Codewalker.SessionEvent
 import codewalker.v1.Codewalker.Step
 import codewalker.v1.openReviewSessionRequest
@@ -41,11 +42,11 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
     init {
         panel.loadingPanel.cancelButton.addActionListener { cancel() }
         panel.idlePanel.setPullRequestClickHandler { pr ->
-            openReview(pr.url, panel.idlePanel.getExperienceLevel())
+            openReview(pr, panel.idlePanel.getExperienceLevel())
         }
     }
 
-    private fun openReview(url: String, level: String) {
+    private fun openReview(pr: PullRequestSummary, level: String) {
         if (!sessionActive.compareAndSet(false, true)) {
             panel.showError("A Codewalker session is already active. Close it before starting another.")
             return
@@ -59,6 +60,17 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
         sessionJob = scope.launch {
             var sessionStarted = false
             try {
+                // Working-tree prep happens first. If the user cancels or
+                // anything fails, we never open the gRPC stream and never
+                // create a server-side session.
+                if (pr.headRef.isNotEmpty()) {
+                    if (!prepareWorkingTree(pr.headRef)) {
+                        return@launch
+                    }
+                } else {
+                    log.info("Codewalker: no head_ref on PR ${pr.number}, skipping working-tree checkout")
+                }
+
                 val stub = CodewalkerClient.getInstance().getStub() ?: run {
                     withContext(Dispatchers.Main) { panel.showError("Not connected to backend") }
                     return@launch
@@ -70,7 +82,7 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
                     else -> ExperienceLevel.EXPERIENCE_LEVEL_MID
                 }
 
-                val host = when (val parsed = HostNormalizer.fromUrlResult(url)) {
+                val host = when (val parsed = HostNormalizer.fromUrlResult(pr.url)) {
                     is HostNormalizer.UrlParseResult.Ok -> parsed.host
                     is HostNormalizer.UrlParseResult.Empty -> {
                         withContext(Dispatchers.Main) { panel.showError("Please enter a review URL.") }
@@ -83,7 +95,7 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
                 }
 
                 val request = openReviewSessionRequest {
-                    this.url = url
+                    this.url = pr.url
                     experienceLevel = expLevel
                     forgeToken = resolveForgeToken(host)
                 }
@@ -104,16 +116,6 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
                             glossary = ready.glossaryList
                             forgeContext = if (ready.hasForgeContext()) ready.forgeContext else null
                             effectiveLevel = ready.effectiveLevel
-
-                            val ctx = forgeContext
-                            if (ctx == null || ctx.headRef.isEmpty()) {
-                                log.info("Codewalker: no head ref in forge context, skipping working-tree checkout")
-                            } else if (!prepareWorkingTree(ctx.headRef, sessionId ?: ready.sessionId)) {
-                                // Error has already been surfaced; abort the
-                                // upstream stream so this coroutine ends and
-                                // releases the sessionActive gate.
-                                throw SessionPreparationAbort()
-                            }
                             sessionStarted = true
                             withContext(Dispatchers.Main) { panel.showSession() }
                         }
@@ -126,8 +128,6 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
                 }
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: SessionPreparationAbort) {
-                // Error was already surfaced inside prepareWorkingTree; nothing else to do.
             } catch (e: Exception) {
                 val formatted = ReviewErrorFormatter.format(e)
                 withContext(Dispatchers.Main) { panel.showError(formatted.message) }
@@ -144,7 +144,7 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
      * On false, the panel has already been navigated back to a non-loading
      * state with an explanation.
      */
-    private suspend fun prepareWorkingTree(headRef: String, sessionTag: String): Boolean {
+    private suspend fun prepareWorkingTree(headRef: String): Boolean {
         val repo = gitOps.firstRepository()
         if (repo == null) {
             log.info("Codewalker: no git repository in project, skipping checkout")
@@ -163,7 +163,8 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
                 return false
             }
             try {
-                gitOps.stashChanges(repo, CodewalkerGitOps.stashMessage(sessionTag))
+                val tag = generateStashTag(headRef)
+                gitOps.stashChanges(repo, CodewalkerGitOps.stashMessage(tag))
             } catch (e: GitOperationException) {
                 withContext(Dispatchers.Main) {
                     panel.showError("Couldn't stash changes: ${e.message}. Session not started.")
@@ -188,6 +189,12 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
         }
 
         return true
+    }
+
+    private fun generateStashTag(headRef: String): String {
+        val safeName = headRef.replace(Regex("[^A-Za-z0-9_-]"), "_").take(40)
+        val timestamp = System.currentTimeMillis()
+        return "$safeName-$timestamp"
     }
 
     private fun warnAboutLeftoverStashes() {
@@ -218,6 +225,4 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
         if (host.isEmpty()) return ""
         return TokenStore.getInstance().get(host) ?: ""
     }
-
-    private class SessionPreparationAbort : RuntimeException()
 }

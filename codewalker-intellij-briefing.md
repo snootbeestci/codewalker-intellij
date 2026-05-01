@@ -277,19 +277,39 @@ in the user's working tree. All files opened during the session are real
 `VirtualFile`s aligned with the diff — full IDE features (Find Usages,
 run configs, navigation) work as normal.
 
-Session-start flow (in `ReviewSessionController.openReview`, after the
-backend's `OpenReviewSession` returns `ReviewReady` and before the panel
-is switched to the session card):
+Session-start flow (in `ReviewSessionController.openReview`):
 
-1. If the working tree is dirty, show a Stash/Cancel modal
-   (`DirtyTreeDialog`). Cancel aborts the session; Stash creates a
-   tagged stash and proceeds.
-2. Fetch from `origin` via a `GitLineHandler` invocation of
-   `git fetch origin` (origin only — fork PRs are not supported in
-   this version and surface a clear "branch not on origin" error).
-3. Check out the branch via `GitBrancher.checkout(branch, false, repos)`
-   — branch checkout, not detached HEAD.
-4. Switch the tool window to the session card and start narration.
+1. The user clicks a PR row in the idle panel. The plugin has the PR's
+   url, number, title, author, and `head_ref` from the
+   `ListPullRequests` response.
+2. Working-tree preparation runs **before** any gRPC call to
+   `OpenReviewSession`:
+   - If the working tree is dirty, show a Stash/Cancel modal
+     (`DirtyTreeDialog`). Cancel aborts the session cleanly; Stash
+     creates a tagged stash and proceeds.
+   - Fetch from `origin` via a `GitLineHandler` invocation of
+     `git fetch origin` (origin only — fork PRs are not supported in
+     this version and surface a clear "branch not on origin" error).
+   - Check out the branch via `GitBrancher.checkout(branch, false, repos)`
+     — branch checkout, not detached HEAD.
+3. Only then is `OpenReviewSession` called. The backend session is
+   created only when the plugin is committed to running it — a cancel
+   in step 2 produces no server-side state, so there is no orphan
+   server session to leak until TTL eviction.
+4. On `REVIEW_READY`, switch the tool window to the session card and
+   start narration.
+
+This ordering depends on `PullRequestSummary.head_ref`, added in
+backend `v0.6.2`. If `head_ref` is empty (defensive — older backends
+or edge cases), the working-tree prep is skipped and a log line
+records the skip; the session falls back to opening without checkout.
+
+Because the prepare step runs before the session ID exists, the stash
+tag is generated locally from the head ref plus a timestamp
+(`generateStashTag` in `ReviewSessionController`). The tag still flows
+through `CodewalkerGitOps.stashMessage` so the `codewalker-` prefix is
+preserved and `findCodewalkerStashes` continues to identify these
+stashes for cleanup.
 
 Stash entries are tagged `codewalker-<sessionTag>` so they can be
 distinguished from user-created stashes. On every session start the
