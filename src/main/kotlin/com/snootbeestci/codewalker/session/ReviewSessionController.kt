@@ -2,7 +2,6 @@ package com.snootbeestci.codewalker.session
 
 import codewalker.v1.Codewalker.ExperienceLevel
 import codewalker.v1.Codewalker.ForgeContext
-import codewalker.v1.Codewalker.GlossaryTerm
 import codewalker.v1.Codewalker.PullRequestSummary
 import codewalker.v1.Codewalker.SessionEvent
 import codewalker.v1.Codewalker.Step
@@ -29,7 +28,6 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
     var sessionId: String? = null
     var steps: List<Step> = emptyList()
     var currentStepId: String? = null
-    var glossary: List<GlossaryTerm> = emptyList()
     var forgeContext: ForgeContext? = null
     var effectiveLevel: Int = 6
 
@@ -112,7 +110,6 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
                             sessionId = ready.sessionId
                             steps = ready.stepsList
                             currentStepId = ready.entryStepId
-                            glossary = ready.glossaryList
                             forgeContext = if (ready.hasForgeContext()) ready.forgeContext else null
                             effectiveLevel = ready.effectiveLevel
                             sessionStarted = true
