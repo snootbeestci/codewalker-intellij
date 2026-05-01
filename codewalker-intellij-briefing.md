@@ -378,6 +378,17 @@ construction. The highlighter retains the fetch-and-compare logic as a
 safety net for projects without a git repository or when checkout was
 skipped.
 
+Highlighted regions in the editor are clickable. A left click on a
+highlighted line opens a popup showing the unified diff for that hunk,
+including removed lines that are not visible in the head-ref content
+displayed in the editor. Clicking the same region again dismisses the
+popup; clicking outside the highlight or outside the editor dismisses
+it as well. Modified clicks (ctrl, shift, alt, meta) fall through to
+the IDE's default handlers so existing gestures like Find Usages
+continue to work.
+
+The popup is non-focusable so the editor retains keyboard focus.
+
 ---
 
 ## Future direction
