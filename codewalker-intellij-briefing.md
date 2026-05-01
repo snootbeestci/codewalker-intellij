@@ -387,7 +387,12 @@ it as well. Modified clicks (ctrl, shift, alt, meta) fall through to
 the IDE's default handlers so existing gestures like Find Usages
 continue to work.
 
-The popup is non-focusable so the editor retains keyboard focus.
+The diff popup uses an IntelliJ editor viewer configured with the Diff
+file type, giving syntax-coloured +/-/@@ lines, line numbers in the
+gutter, find-in-popup (cmd/ctrl-F), and copy-with-formatting. The
+viewer is read-only and non-focusable, so the underlying editor keeps
+keyboard focus. The viewer is disposed when the popup closes, via
+Disposer.register on the popup itself.
 
 ---
 
