@@ -147,6 +147,7 @@ class SessionPanel(
 
     private var controller: ReviewSessionController? = null
     private var navigationController: NavigationController? = null
+    private var suppressSelectionListener = false
 
     init {
         buildLayout()
@@ -224,6 +225,7 @@ class SessionPanel(
         forwardButton.addActionListener { navigationController?.navigateForward() }
         stepList.addListSelectionListener { event ->
             if (event.valueIsAdjusting) return@addListSelectionListener
+            if (suppressSelectionListener) return@addListSelectionListener
             val item = stepList.selectedValue ?: return@addListSelectionListener
             if (item is StepListItem.Header || item is StepListItem.Subtitle) {
                 stepList.clearSelection()
@@ -285,6 +287,7 @@ class SessionPanel(
     }
 
     fun applyHighlightFor(step: Step) {
+        updateStepHighlight(step.id)
         if (step.hasHunkSpan()) {
             highlighter.highlightHunk(step.hunkSpan)
         }
@@ -299,11 +302,16 @@ class SessionPanel(
             val item = stepListModel.getElementAt(it)
             item is StepListItem.StepRow && item.stepId == stepId
         }
-        if (idx != null) {
-            stepList.selectedIndex = idx
-            stepList.ensureIndexIsVisible(idx)
-        } else {
-            stepList.clearSelection()
+        suppressSelectionListener = true
+        try {
+            if (idx != null) {
+                stepList.selectedIndex = idx
+                stepList.ensureIndexIsVisible(idx)
+            } else {
+                stepList.clearSelection()
+            }
+        } finally {
+            suppressSelectionListener = false
         }
     }
 
