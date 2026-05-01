@@ -387,7 +387,20 @@ it as well. Modified clicks (ctrl, shift, alt, meta) fall through to
 the IDE's default handlers so existing gestures like Find Usages
 continue to work.
 
-The popup is non-focusable so the editor retains keyboard focus.
+While the mouse is over a highlighted line the editor cursor switches
+from the I-beam to the default arrow as a hover affordance. This is
+done via `EditorEx.setCustomCursor(this, …)`, which scopes the
+override to the highlighter so other editor cursor logic (e.g.
+hyperlinks elsewhere) is not affected. Passing `null` as the cursor
+clears the override; this happens when the mouse leaves a highlight
+and on `clearHighlight()`.
+
+The diff popup uses an IntelliJ editor viewer configured with the Diff
+file type, giving syntax-coloured +/-/@@ lines, line numbers in the
+gutter, find-in-popup (cmd/ctrl-F), and copy-with-formatting. The
+viewer is read-only and non-focusable, so the underlying editor keeps
+keyboard focus. The viewer is disposed when the popup closes, via
+Disposer.register on the popup itself.
 
 ---
 

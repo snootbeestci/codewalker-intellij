@@ -6,11 +6,15 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.ScrollType
 import com.intellij.openapi.editor.event.EditorMouseEvent
 import com.intellij.openapi.editor.event.EditorMouseEventArea
 import com.intellij.openapi.editor.event.EditorMouseListener
+import com.intellij.openapi.editor.event.EditorMouseMotionListener
+import com.intellij.openapi.editor.ex.EditorEx
+import com.intellij.openapi.editor.highlighter.EditorHighlighterFactory
 import com.intellij.openapi.editor.markup.HighlighterLayer
 import com.intellij.openapi.editor.markup.HighlighterTargetArea
 import com.intellij.openapi.editor.markup.RangeHighlighter
@@ -21,13 +25,13 @@ import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.testFramework.LightVirtualFile
 import com.intellij.ui.JBColor
-import com.intellij.ui.components.JBScrollPane
 import com.snootbeestci.codewalker.forge.HostNormalizer
 import com.snootbeestci.codewalker.forge.TokenStore
 import com.snootbeestci.codewalker.grpc.CodewalkerClient
@@ -42,11 +46,10 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.Color
+import java.awt.Cursor
 import java.awt.Dimension
-import java.awt.Font
 import java.awt.Point
 import java.awt.event.MouseEvent
-import javax.swing.JTextArea
 
 class EditorHighlighter(
     private val project: Project,
@@ -58,6 +61,7 @@ class EditorHighlighter(
     private var currentHighlighters: List<RangeHighlighter> = emptyList()
     private var currentEditor: Editor? = null
     private var clickListener: EditorMouseListener? = null
+    private var motionListener: EditorMouseMotionListener? = null
     private var activePopup: JBPopup? = null
     private var currentRawDiff: String = ""
 
@@ -205,6 +209,23 @@ class EditorHighlighter(
         )
 
         attachClickListener(editor)
+        attachCursorListener(editor)
+    }
+
+    private fun attachCursorListener(editor: Editor) {
+        if (editor !is EditorEx) return
+        val listener = object : EditorMouseMotionListener {
+            override fun mouseMoved(e: EditorMouseEvent) {
+                val overHighlight = e.area == EditorMouseEventArea.EDITING_AREA &&
+                    isLineHighlighted(editor.xyToLogicalPosition(e.mouseEvent.point).line)
+                editor.setCustomCursor(
+                    this@EditorHighlighter,
+                    if (overHighlight) Cursor.getDefaultCursor() else null,
+                )
+            }
+        }
+        editor.addEditorMouseMotionListener(listener)
+        motionListener = listener
     }
 
     private fun attachClickListener(editor: Editor) {
@@ -252,17 +273,30 @@ class EditorHighlighter(
     private fun showDiffPopup(editor: Editor, screenLocation: Point) {
         if (currentRawDiff.isEmpty()) return
 
-        val textArea = JTextArea(currentRawDiff).apply {
-            font = Font(Font.MONOSPACED, Font.PLAIN, 12)
-            isEditable = false
-            lineWrap = false
-        }
-        val scrollPane = JBScrollPane(textArea).apply {
-            preferredSize = Dimension(600, 300)
+        val editorFactory = EditorFactory.getInstance()
+        val document = editorFactory.createDocument(currentRawDiff)
+        val viewer = editorFactory.createViewer(document, project) as EditorEx
+
+        val diffFileType = FileTypeManager.getInstance().findFileTypeByName("Diff")
+        if (diffFileType != null) {
+            viewer.highlighter = EditorHighlighterFactory.getInstance()
+                .createEditorHighlighter(project, diffFileType)
         }
 
+        viewer.settings.apply {
+            isLineNumbersShown = true
+            isLineMarkerAreaShown = false
+            isFoldingOutlineShown = false
+            isRightMarginShown = false
+            additionalLinesCount = 0
+            additionalColumnsCount = 0
+            isCaretRowShown = false
+        }
+        viewer.isViewer = true
+        viewer.component.preferredSize = Dimension(700, 350)
+
         val popup = JBPopupFactory.getInstance()
-            .createComponentPopupBuilder(scrollPane, textArea)
+            .createComponentPopupBuilder(viewer.component, viewer.contentComponent)
             .setRequestFocus(false)
             .setFocusable(false)
             .setMovable(true)
@@ -270,6 +304,10 @@ class EditorHighlighter(
             .setCancelOnClickOutside(true)
             .setCancelOnOtherWindowOpen(true)
             .createPopup()
+
+        Disposer.register(popup) {
+            editorFactory.releaseEditor(viewer)
+        }
 
         popup.showInScreenCoordinates(editor.component, screenLocation)
         activePopup = popup
@@ -280,6 +318,9 @@ class EditorHighlighter(
         activePopup = null
         clickListener?.let { l -> currentEditor?.removeEditorMouseListener(l) }
         clickListener = null
+        motionListener?.let { l -> currentEditor?.removeEditorMouseMotionListener(l) }
+        motionListener = null
+        (currentEditor as? EditorEx)?.setCustomCursor(this, null)
         currentHighlighters.forEach { it.dispose() }
         currentHighlighters = emptyList()
         currentEditor = null
