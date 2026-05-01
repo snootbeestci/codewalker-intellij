@@ -177,6 +177,22 @@ Colour pairs use `JBColor` so they adapt between light and dark themes.
 - All gRPC calls use Kotlin coroutines — never block the UI thread
 - UI updates always dispatched via `withContext(Dispatchers.Main)`
 
+The navigation stream emits three event variants the plugin handles:
+
+- `token` — narration text. Appended to the narration pane as it
+  arrives.
+- `summary_ready` — structured summary (risk, breaking, tests, etc.).
+  Updates the summary table immediately, typically before narration
+  finishes streaming. New as of backend v0.7.0.
+- `complete` — terminal event. Updates breadcrumb, navigation buttons,
+  step highlight, and (for backward compatibility) the summary table
+  again. Clients running against pre-v0.7.0 backends rely on this for
+  the summary, so the redundant update is intentional.
+
+The summary table thus populates ~6 seconds earlier than narration
+finishes, giving the reviewer risk/breaking/tests at-a-glance before
+reading the full prose.
+
 ---
 
 ## Token resolution order
