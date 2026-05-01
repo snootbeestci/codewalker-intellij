@@ -3,14 +3,18 @@ package com.snootbeestci.codewalker.toolwindow
 import codewalker.v1.Codewalker.StepSummary
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
+import com.intellij.util.ui.AsyncProcessIcon
 import com.intellij.util.ui.JBUI
 import java.awt.BorderLayout
+import java.awt.CardLayout
 import java.awt.Color
 import java.awt.FlowLayout
 import java.awt.Font
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import java.awt.Insets
+import javax.swing.Box
+import javax.swing.BoxLayout
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.JTextArea
@@ -18,7 +22,6 @@ import javax.swing.UIManager
 
 class SummaryTable {
 
-    val root: JPanel = JPanel(BorderLayout())
     private val rowsPanel: JPanel = JPanel(GridBagLayout())
 
     private val pillLabel: JBLabel = JBLabel("").apply {
@@ -39,12 +42,36 @@ class SummaryTable {
         "Confidence" to makeValueCell(),
     )
 
+    private val tableCard: JPanel = JPanel(BorderLayout())
+
+    private val loadingCard: JPanel = JPanel(GridBagLayout()).apply {
+        val container = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.X_AXIS)
+            isOpaque = false
+            add(AsyncProcessIcon("CodewalkerSummaryLoading"))
+            add(Box.createHorizontalStrut(8))
+            add(JBLabel("Generating summary…").apply {
+                foreground = UIManager.getColor("Label.disabledForeground")
+                    ?: JBColor.GRAY
+            })
+        }
+        add(container, GridBagConstraints())
+        border = JBUI.Borders.empty(24, 0)
+    }
+
+    private val cardLayout: CardLayout = CardLayout()
+
+    val root: JPanel = JPanel(cardLayout).apply {
+        add(tableCard, CARD_TABLE)
+        add(loadingCard, CARD_LOADING)
+    }
+
     init {
         val pillWrapper = JPanel(FlowLayout(FlowLayout.LEFT, 8, 4)).apply {
             add(pillLabel)
         }
-        root.add(pillWrapper, BorderLayout.NORTH)
-        root.add(rowsPanel, BorderLayout.CENTER)
+        tableCard.add(pillWrapper, BorderLayout.NORTH)
+        tableCard.add(rowsPanel, BorderLayout.CENTER)
 
         rows.forEachIndexed { index, (label, valueCell) ->
             valueCell.text = EMPTY_VALUE
@@ -68,9 +95,14 @@ class SummaryTable {
         }
     }
 
+    fun showLoading() {
+        cardLayout.show(root, CARD_LOADING)
+    }
+
     fun update(summary: StepSummary?) {
         if (summary == null) {
-            clear()
+            resetRows()
+            cardLayout.show(root, CARD_TABLE)
             return
         }
         val breakingSeverity = SeverityParser.forBreaking(summary.breaking)
@@ -87,17 +119,23 @@ class SummaryTable {
         setCell(7, summary.confidence, Severity.NEUTRAL)
 
         updatePill(SeverityParser.worst(breakingSeverity, riskSeverity, testsSeverity))
+        cardLayout.show(root, CARD_TABLE)
     }
 
     fun clear() {
+        resetRows()
+        cardLayout.show(root, CARD_TABLE)
+    }
+
+    fun valueLabelAt(index: Int): JTextArea = rows[index].second
+
+    private fun resetRows() {
         rows.forEach { (_, cell) ->
             cell.text = EMPTY_VALUE
             applyForeground(cell, Severity.NEUTRAL)
         }
         updatePill(Severity.NEUTRAL)
     }
-
-    fun valueLabelAt(index: Int): JTextArea = rows[index].second
 
     private fun setCell(index: Int, value: String, severity: Severity) {
         val cell = rows[index].second
@@ -146,6 +184,9 @@ class SummaryTable {
 
     companion object {
         const val EMPTY_VALUE: String = "—"
+
+        private const val CARD_TABLE = "table"
+        private const val CARD_LOADING = "loading"
 
         private val GREEN_FG = JBColor(Color(0x2E7D32), Color(0x81C784))
         private val AMBER_FG = JBColor(Color(0xE65100), Color(0xFFB74D))
