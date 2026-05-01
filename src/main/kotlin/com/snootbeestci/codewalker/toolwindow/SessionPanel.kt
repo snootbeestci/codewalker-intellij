@@ -259,7 +259,7 @@ class SessionPanel(
 
     fun clearNarration() {
         narrationPane.text = ""
-        summaryTable.clear()
+        summaryTable.showLoading()
     }
 
     fun appendNarrationToken(text: String) {

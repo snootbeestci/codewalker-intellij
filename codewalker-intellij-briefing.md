@@ -126,8 +126,28 @@ Inside the SESSION card, the body is a horizontal `JBSplitter`:
 
 `SessionPanel.onStepComplete` calls `summaryTable.update(complete.summary)`
 when `complete.hasSummary()` is true, otherwise passes `null` (which clears
-the table). `SessionPanel.clearNarration` clears both the narration pane
-and the summary table.
+the table). `SessionPanel.clearNarration` clears the narration pane and
+puts the summary table into its loading state (see below).
+
+The summary table has two display states:
+
+- **Loading** — a spinner with "Generating summary…" label, shown while
+  the backend is generating the structured summary. Entered via
+  `summaryTable.showLoading()`, which `SessionPanel.clearNarration()`
+  calls at the start of every navigation.
+- **Populated** — the eight-row table with risk/breaking/tests etc.,
+  shown once `SummaryReady` (or `Complete` for older backends) provides
+  the summary. Entered via `summaryTable.update(summary)`.
+
+The loading state typically lasts 2–4 seconds. Without it, the user
+sees `—` placeholders that read as "no data" rather than "loading",
+making the panel feel unresponsive even when work is in progress.
+
+`summaryTable.clear()` resets to empty placeholders without entering
+the loading state — used for navigation cleanup and dispose. The
+spinner is an `AsyncProcessIcon` whose animation lifecycle is driven
+by component visibility via `CardLayout`, so no manual start/stop is
+required.
 
 The file/step list is built by joining `ReviewReady.forge_context.files`
 (canonical file order, deterministic, aligned with backend Forward
