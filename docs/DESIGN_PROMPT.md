@@ -57,6 +57,8 @@ than a comment or inline instruction. Use this format:
 decision: "Should I write a fix instruction for this?"
 **[Note]** — informational only, no action needed.
 
+more changes in diff. This one has...
+
 Categories to check:
 - Deviations from the proto contract → always Blocker
 - Contradictions with `codewalker-intellij-briefing.md` → always Blocker
@@ -66,6 +68,8 @@ Categories to check:
 
 Never silently skip a Suggested item. If the user declines, acknowledge it
 and move on. If accepted, produce a ready-to-paste Claude Code instruction.
+
+...multiple lines
 
 ## Continuity
 
