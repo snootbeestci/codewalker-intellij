@@ -141,7 +141,7 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
      * state with an explanation.
      */
     private suspend fun prepareWorkingTree(headRef: String): Boolean {
-        val repo = gitOps.firstRepository()
+        val repo = gitOps.primaryRepository()
         if (repo == null) {
             log.info("Codewalker: no git repository in project, skipping checkout")
             return true
@@ -194,7 +194,7 @@ class ReviewSessionController(private val panel: CodewalkerPanel) {
     }
 
     private fun warnAboutLeftoverStashes() {
-        val repo = gitOps.firstRepository() ?: return
+        val repo = gitOps.primaryRepository() ?: return
         val leftover = gitOps.findCodewalkerStashes(repo)
         if (leftover.isNotEmpty()) {
             log.warn(
