@@ -379,6 +379,22 @@ function resumes when the AWT-later callback fires), and
 `GitOperationException`, which the controller surfaces verbatim to
 the user.
 
+Projects can contain multiple git repositories — typically the
+project root plus one or more submodules. The plugin treats the
+project root's repository as the primary one for "what PRs am I
+reviewing" and for session-time checkout/stash work. The primary
+repository is the one whose root path matches the IDE project's
+`basePath`; if no repository matches (e.g. the project is opened
+inside a sub-directory of a repo), the plugin falls back to the
+first repository the manager returns. Submodule repositories are
+otherwise ignored. The selection lives in
+`CodewalkerGitOps.pickPrimaryRepository` and is used by both
+`CodewalkerGitOps.primaryRepository` and `GitHubRemoteResolver` so
+both code paths agree on which repo represents the project.
+
+Multi-repo projects where the user wants to review PRs in a
+submodule are not supported in this version.
+
 The legacy `EditorHighlighter` `FetchFileAtRef`-based fallback (head-ref
 content fetched over gRPC and rendered in a `LightVirtualFile` when the
 working tree was out of sync) is no longer the primary path — once the

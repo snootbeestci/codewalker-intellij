@@ -2,7 +2,6 @@ package com.snootbeestci.codewalker.git
 
 import com.intellij.openapi.project.Project
 import com.snootbeestci.codewalker.forge.HostNormalizer
-import git4idea.repo.GitRepositoryManager
 
 data class ProjectRepoInfo(
     val host: String,
@@ -24,10 +23,8 @@ sealed class RemoteParseResult {
 object GitHubRemoteResolver {
 
     fun resolve(project: Project): ProjectRepoInfo? {
-        val repos = GitRepositoryManager.getInstance(project).repositories
-        val origin = repos.firstNotNullOfOrNull { repo ->
-            repo.remotes.firstOrNull { it.name == "origin" }
-        } ?: return null
+        val repo = CodewalkerGitOps.pickPrimaryRepository(project) ?: return null
+        val origin = repo.remotes.firstOrNull { it.name == "origin" } ?: return null
 
         val url = origin.firstUrl ?: return null
         return parseRemoteUrl(url)
@@ -39,10 +36,8 @@ object GitHubRemoteResolver {
      * different error messages.
      */
     fun resolveResult(project: Project): RemoteParseResult {
-        val repos = GitRepositoryManager.getInstance(project).repositories
-        val origin = repos.firstNotNullOfOrNull { repo ->
-            repo.remotes.firstOrNull { it.name == "origin" }
-        } ?: return RemoteParseResult.Empty
+        val repo = CodewalkerGitOps.pickPrimaryRepository(project) ?: return RemoteParseResult.Empty
+        val origin = repo.remotes.firstOrNull { it.name == "origin" } ?: return RemoteParseResult.Empty
 
         val url = origin.firstUrl ?: return RemoteParseResult.Empty
         return parseRemoteUrlResult(url)

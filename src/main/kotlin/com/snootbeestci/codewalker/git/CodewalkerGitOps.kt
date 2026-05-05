@@ -25,8 +25,7 @@ class CodewalkerGitOps(private val project: Project) {
 
     private val log = Logger.getInstance(CodewalkerGitOps::class.java)
 
-    fun firstRepository(): GitRepository? =
-        GitRepositoryManager.getInstance(project).repositories.firstOrNull()
+    fun primaryRepository(): GitRepository? = pickPrimaryRepository(project)
 
     fun isWorkingTreeDirty(repo: GitRepository): Boolean {
         val tracked = ChangeListManager.getInstance(project).allChanges
@@ -98,6 +97,20 @@ class CodewalkerGitOps(private val project: Project) {
         const val CODEWALKER_STASH_TAG = "codewalker-"
 
         fun stashMessage(sessionTag: String): String = "$CODEWALKER_STASH_TAG$sessionTag"
+
+        /**
+         * Picks the project's primary git repository. Projects can contain
+         * multiple repositories (typically the project root plus one or more
+         * submodules). The primary one is the repository whose root matches
+         * the project's `basePath`. Falls back to the first-found repository
+         * when no root matches (e.g. project not opened at the repo root).
+         */
+        fun pickPrimaryRepository(project: Project): GitRepository? {
+            val manager = GitRepositoryManager.getInstance(project)
+            val basePath = project.basePath ?: return manager.repositories.firstOrNull()
+            return manager.repositories.firstOrNull { it.root.path == basePath }
+                ?: manager.repositories.firstOrNull()
+        }
 
         /**
          * Pure helper extracted from [findCodewalkerStashes] for unit testing.
