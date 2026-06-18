@@ -73,6 +73,7 @@
   button:hover { background: #333; }
   button.secondary { background: #ddd; color: #222; }
   button.secondary:hover { background: #ccc; }
+  button:disabled { opacity: 0.5; cursor: wait; }
   #status {
     margin-top: 14px;
     text-align: center;
@@ -95,15 +96,16 @@
 </head>
 <body>
   <h1>Star Battle</h1>
-  <div class="subtitle">Click to cycle: empty &rarr; dot &rarr; star &rarr; empty</div>
+  <div class="subtitle">Click to cycle: empty &rarr; dot &rarr; star &rarr; empty (right-click toggles star)</div>
 
   <div class="panel">
     <div id="board"></div>
     <div class="controls">
+      <button id="new">New Game</button>
       <button id="reset" class="secondary">Reset</button>
       <button id="solve" class="secondary">Show Solution</button>
     </div>
-    <div id="status">Place 5 stars &mdash; one per row, column, and colour.</div>
+    <div id="status">Loading…</div>
   </div>
 
   <div class="rules">
@@ -112,30 +114,13 @@
       <li>Each row, column, and coloured region must contain exactly one star.</li>
       <li>All other cells should be marked with a dot.</li>
       <li>Stars cannot touch &mdash; not even diagonally.</li>
+      <li>Every generated board is solvable by pure logic — no guessing required.</li>
     </ul>
   </div>
 
 <script>
 (() => {
   const SIZE = 5;
-  // Region map (5 contiguous regions, each holding exactly one star in the solution).
-  const REGIONS = [
-    [1, 1, 1, 2, 2],
-    [1, 3, 1, 2, 2],
-    [3, 3, 3, 4, 2],
-    [3, 5, 4, 4, 4],
-    [5, 5, 5, 5, 4],
-  ];
-  // One known solution (used for solution-reveal and win detection isn't strictly needed,
-  // since win is derived purely from the rules — but solution is handy for "Show Solution").
-  const SOLUTION = [
-    [1,0,0,0,0],
-    [0,0,0,1,0],
-    [0,1,0,0,0],
-    [0,0,0,0,1],
-    [0,0,1,0,0],
-  ];
-  // Distinct, soft colours for each region id (1..5).
   const COLOURS = {
     1: "#f8c8a8",
     2: "#c7e3f7",
@@ -144,48 +129,280 @@
     5: "#f7e9a8",
   };
 
-  // State: 0 = empty, 1 = dot, 2 = star
-  let state = Array.from({length: SIZE}, () => Array(SIZE).fill(0));
+  // ---- Utilities --------------------------------------------------------
+  const shuffle = (arr) => {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  };
+  const cloneGrid = (g) => g.map(r => r.slice());
+
+  // ---- Step 1: random valid star placement ------------------------------
+  function generateStars(N) {
+    const cols = Array(N).fill(-1);
+    function place(r) {
+      if (r === N) return true;
+      const order = shuffle([...Array(N).keys()]);
+      for (const c of order) {
+        let ok = true;
+        for (let pr = 0; pr < r; pr++) {
+          if (cols[pr] === c) { ok = false; break; }
+          if (r - pr === 1 && Math.abs(cols[pr] - c) <= 1) { ok = false; break; }
+        }
+        if (!ok) continue;
+        cols[r] = c;
+        if (place(r + 1)) return true;
+        cols[r] = -1;
+      }
+      return false;
+    }
+    place(0);
+    return cols.map((c, r) => [r, c]);
+  }
+
+  // ---- Step 2: grow contiguous regions, one star each -------------------
+  // `bias` controls how strongly small regions are favoured during growth.
+  // 0 = uniform random (very unbalanced shapes); higher = more balanced.
+  function generateRegions(N, stars, bias) {
+    const regions = Array.from({length: N}, () => Array(N).fill(0));
+    const sizes = Array(N + 1).fill(0);
+    stars.forEach(([r, c], i) => { regions[r][c] = i + 1; sizes[i + 1] = 1; });
+    let remaining = N * N - N;
+
+    while (remaining > 0) {
+      // Compute each region's frontier (unassigned 4-neighbours).
+      const frontiers = Array.from({length: N + 1}, () => []);
+      for (let r = 0; r < N; r++) {
+        for (let c = 0; c < N; c++) {
+          if (regions[r][c] === 0) continue;
+          const id = regions[r][c];
+          for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+            const nr = r + dr, nc = c + dc;
+            if (nr<0||nc<0||nr>=N||nc>=N) continue;
+            if (regions[nr][nc] === 0) frontiers[id].push([nr, nc]);
+          }
+        }
+      }
+      // Only regions with at least one frontier cell can grow.
+      const active = [];
+      for (let id = 1; id <= N; id++) if (frontiers[id].length) active.push(id);
+      if (active.length === 0) return null;
+      // Weighted-random pick: small regions favoured according to `bias`.
+      const weights = active.map(id => Math.pow(1 / sizes[id], bias));
+      const total = weights.reduce((a, b) => a + b, 0);
+      let pick = Math.random() * total, id = active[active.length - 1];
+      for (let i = 0; i < active.length; i++) {
+        pick -= weights[i];
+        if (pick <= 0) { id = active[i]; break; }
+      }
+      const f = frontiers[id];
+      const [r, c] = f[Math.floor(Math.random() * f.length)];
+      regions[r][c] = id;
+      sizes[id]++;
+      remaining--;
+    }
+    return regions;
+  }
+
+  // ---- Step 3: pure-logic solver ----------------------------------------
+  // Returns a fully-solved grid (state of stars/dots) or null if not solvable
+  // by the deduction rules implemented here (no guessing).
+  function logicSolve(N, regions) {
+    // 0 = unknown, 1 = star, 2 = dot
+    const state = Array.from({length: N}, () => Array(N).fill(0));
+
+    function setDot(r, c) {
+      if (state[r][c] === 2) return true;
+      if (state[r][c] === 1) return false;
+      state[r][c] = 2;
+      return true;
+    }
+    function setStar(r, c) {
+      if (state[r][c] === 1) return true;
+      if (state[r][c] === 2) return false;
+      state[r][c] = 1;
+      for (let i = 0; i < N; i++) {
+        if (i !== c && !setDot(r, i)) return false;
+        if (i !== r && !setDot(i, c)) return false;
+      }
+      const reg = regions[r][c];
+      for (let rr = 0; rr < N; rr++)
+        for (let cc = 0; cc < N; cc++)
+          if (regions[rr][cc] === reg && (rr !== r || cc !== c))
+            if (!setDot(rr, cc)) return false;
+      for (let dr = -1; dr <= 1; dr++)
+        for (let dc = -1; dc <= 1; dc++) {
+          if (!dr && !dc) continue;
+          const nr = r + dr, nc = c + dc;
+          if (nr<0||nc<0||nr>=N||nc>=N) continue;
+          if (!setDot(nr, nc)) return false;
+        }
+      return true;
+    }
+
+    // Build groups: each row, each column, each region (each must contain exactly 1 star).
+    const groups = [];
+    for (let r = 0; r < N; r++) {
+      const cells = [];
+      for (let c = 0; c < N; c++) cells.push([r, c]);
+      groups.push({type: "row", key: r, cells});
+    }
+    for (let c = 0; c < N; c++) {
+      const cells = [];
+      for (let r = 0; r < N; r++) cells.push([r, c]);
+      groups.push({type: "col", key: c, cells});
+    }
+    const regCells = {};
+    for (let r = 0; r < N; r++)
+      for (let c = 0; c < N; c++) {
+        const id = regions[r][c];
+        (regCells[id] = regCells[id] || []).push([r, c]);
+      }
+    for (const id of Object.keys(regCells)) {
+      groups.push({type: "reg", key: +id, cells: regCells[id]});
+    }
+
+    let progress = true, safety = 0;
+    while (progress && safety++ < 1000) {
+      progress = false;
+
+      // Rule A — naked / hidden single per group.
+      for (const g of groups) {
+        let stars = 0;
+        const unknowns = [];
+        for (const [r, c] of g.cells) {
+          if (state[r][c] === 1) stars++;
+          else if (state[r][c] === 0) unknowns.push([r, c]);
+        }
+        if (stars > 1) return null;
+        if (stars === 1 && unknowns.length) {
+          for (const [r, c] of unknowns) if (!setDot(r, c)) return null;
+          progress = true;
+        } else if (stars === 0 && unknowns.length === 1) {
+          if (!setStar(unknowns[0][0], unknowns[0][1])) return null;
+          progress = true;
+        } else if (stars === 0 && unknowns.length === 0) {
+          return null;
+        }
+      }
+
+      // Rule B — intersection: if all unknowns of group G fall inside another
+      // group H, then H's star is inside G, so any cell of H outside G is a dot.
+      for (const g of groups) {
+        let stars = 0;
+        const unknowns = [];
+        for (const [r, c] of g.cells) {
+          if (state[r][c] === 1) stars++;
+          else if (state[r][c] === 0) unknowns.push([r, c]);
+        }
+        if (stars > 0 || unknowns.length === 0) continue;
+        // Check confinement: do all unknowns share a row? column? region?
+        const rows = new Set(unknowns.map(([r]) => r));
+        const cols = new Set(unknowns.map(([, c]) => c));
+        const regs = new Set(unknowns.map(([r, c]) => regions[r][c]));
+        const gKey = (r, c) => {
+          if (g.type === "row") return r === g.key;
+          if (g.type === "col") return c === g.key;
+          return regions[r][c] === g.key;
+        };
+        const eliminateFrom = (predicate) => {
+          for (let r = 0; r < N; r++)
+            for (let c = 0; c < N; c++)
+              if (predicate(r, c) && !gKey(r, c) && state[r][c] === 0) {
+                if (!setDot(r, c)) return false;
+                progress = true;
+              }
+          return true;
+        };
+        if (rows.size === 1) {
+          const rr = [...rows][0];
+          if (!eliminateFrom((r) => r === rr)) return null;
+        }
+        if (cols.size === 1) {
+          const cc = [...cols][0];
+          if (!eliminateFrom((_, c) => c === cc)) return null;
+        }
+        if (regs.size === 1) {
+          const rg = [...regs][0];
+          if (!eliminateFrom((r, c) => regions[r][c] === rg)) return null;
+        }
+      }
+    }
+
+    for (let r = 0; r < N; r++)
+      for (let c = 0; c < N; c++)
+        if (state[r][c] === 0) return null;
+    return state;
+  }
+
+  // ---- Generation loop: keep regenerating until logic solves it ---------
+  function newPuzzle(N) {
+    const biases = [0, 1, 2, 4];
+    for (let attempt = 0; attempt < 4000; attempt++) {
+      const stars = generateStars(N);
+      const bias = biases[attempt % biases.length];
+      const regions = generateRegions(N, stars, bias);
+      if (!regions) continue;
+      const solved = logicSolve(N, regions);
+      if (!solved) continue;
+      // Sanity-check that the solver's solution matches the generator's stars.
+      const solStars = new Set();
+      for (let r = 0; r < N; r++)
+        for (let c = 0; c < N; c++)
+          if (solved[r][c] === 1) solStars.add(`${r},${c}`);
+      const genStars = new Set(stars.map(([r, c]) => `${r},${c}`));
+      if (solStars.size !== genStars.size) continue;
+      let match = true;
+      for (const k of solStars) if (!genStars.has(k)) { match = false; break; }
+      if (!match) continue;
+      return { regions, solution: stars };
+    }
+    return null;
+  }
+
+  // ---- UI / state -------------------------------------------------------
+  let regions = null;
+  let solution = null;
+  let state = null;
+  let cellEls = [];
 
   const boardEl = document.getElementById("board");
   const statusEl = document.getElementById("status");
   boardEl.style.gridTemplateColumns = `repeat(${SIZE}, var(--cell-size))`;
 
-  const cellEls = [];
-  for (let r = 0; r < SIZE; r++) {
-    const row = [];
-    for (let c = 0; c < SIZE; c++) {
-      const div = document.createElement("div");
-      div.className = "cell";
-      div.style.background = COLOURS[REGIONS[r][c]];
-      div.style.borderTop    = borderBetween(r, c, r - 1, c);
-      div.style.borderLeft   = borderBetween(r, c, r, c - 1);
-      div.style.borderRight  = borderBetween(r, c, r, c + 1);
-      div.style.borderBottom = borderBetween(r, c, r + 1, c);
-      div.addEventListener("click", () => cycle(r, c));
-      div.addEventListener("contextmenu", (e) => { e.preventDefault(); toggleStar(r, c); });
-      boardEl.appendChild(div);
-      row.push(div);
-    }
-    cellEls.push(row);
-  }
-  render();
-
   function borderBetween(r1, c1, r2, c2) {
-    // Thick black border between cells of different regions or at the board edge.
     const sameRegion =
       r2 >= 0 && r2 < SIZE && c2 >= 0 && c2 < SIZE &&
-      REGIONS[r1][c1] === REGIONS[r2][c2];
+      regions[r1][c1] === regions[r2][c2];
     return sameRegion ? "1px solid rgba(0,0,0,0.18)" : "2px solid var(--border)";
   }
 
-  function cycle(r, c) {
-    state[r][c] = (state[r][c] + 1) % 3;
-    render();
-  }
-  function toggleStar(r, c) {
-    state[r][c] = state[r][c] === 2 ? 0 : 2;
-    render();
+  function buildBoard() {
+    boardEl.innerHTML = "";
+    cellEls = [];
+    for (let r = 0; r < SIZE; r++) {
+      const row = [];
+      for (let c = 0; c < SIZE; c++) {
+        const div = document.createElement("div");
+        div.className = "cell";
+        div.style.background = COLOURS[regions[r][c]];
+        div.style.borderTop    = borderBetween(r, c, r - 1, c);
+        div.style.borderLeft   = borderBetween(r, c, r, c - 1);
+        div.style.borderRight  = borderBetween(r, c, r, c + 1);
+        div.style.borderBottom = borderBetween(r, c, r + 1, c);
+        div.addEventListener("click", () => { state[r][c] = (state[r][c] + 1) % 3; render(); });
+        div.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          state[r][c] = state[r][c] === 2 ? 0 : 2;
+          render();
+        });
+        boardEl.appendChild(div);
+        row.push(div);
+      }
+      cellEls.push(row);
+    }
   }
 
   function render() {
@@ -194,15 +411,9 @@
       for (let c = 0; c < SIZE; c++) {
         const el = cellEls[r][c];
         el.classList.remove("star", "dot", "error");
-        if (state[r][c] === 2) {
-          el.textContent = "★";
-          el.classList.add("star");
-        } else if (state[r][c] === 1) {
-          el.textContent = "•";
-          el.classList.add("dot");
-        } else {
-          el.textContent = "";
-        }
+        if (state[r][c] === 2) { el.textContent = "★"; el.classList.add("star"); }
+        else if (state[r][c] === 1) { el.textContent = "•"; el.classList.add("dot"); }
+        else el.textContent = "";
         if (errors.has(`${r},${c}`)) el.classList.add("error");
       }
     }
@@ -212,8 +423,6 @@
   function findErrors() {
     const bad = new Set();
     const mark = (r, c) => bad.add(`${r},${c}`);
-
-    // Row / column conflicts
     for (let i = 0; i < SIZE; i++) {
       const rowStars = [], colStars = [];
       for (let j = 0; j < SIZE; j++) {
@@ -223,69 +432,83 @@
       if (rowStars.length > 1) rowStars.forEach(([r, c]) => mark(r, c));
       if (colStars.length > 1) colStars.forEach(([r, c]) => mark(r, c));
     }
-
-    // Region conflicts
     const byRegion = {};
-    for (let r = 0; r < SIZE; r++) {
+    for (let r = 0; r < SIZE; r++)
       for (let c = 0; c < SIZE; c++) {
         if (state[r][c] !== 2) continue;
-        const reg = REGIONS[r][c];
+        const reg = regions[r][c];
         (byRegion[reg] = byRegion[reg] || []).push([r, c]);
       }
-    }
     Object.values(byRegion).forEach(stars => {
       if (stars.length > 1) stars.forEach(([r, c]) => mark(r, c));
     });
-
-    // Adjacency (including diagonals)
-    for (let r = 0; r < SIZE; r++) {
+    for (let r = 0; r < SIZE; r++)
       for (let c = 0; c < SIZE; c++) {
         if (state[r][c] !== 2) continue;
-        for (let dr = -1; dr <= 1; dr++) {
+        for (let dr = -1; dr <= 1; dr++)
           for (let dc = -1; dc <= 1; dc++) {
             if (!dr && !dc) continue;
             const nr = r + dr, nc = c + dc;
-            if (nr < 0 || nc < 0 || nr >= SIZE || nc >= SIZE) continue;
+            if (nr<0||nc<0||nr>=SIZE||nc>=SIZE) continue;
             if (state[nr][nc] === 2) { mark(r, c); mark(nr, nc); }
           }
-        }
       }
-    }
     return bad;
   }
 
   function updateStatus(errors) {
-    const stars = [];
+    let stars = 0;
     for (let r = 0; r < SIZE; r++)
       for (let c = 0; c < SIZE; c++)
-        if (state[r][c] === 2) stars.push([r, c]);
-
+        if (state[r][c] === 2) stars++;
     statusEl.classList.remove("win", "err");
-
     if (errors.size > 0) {
       statusEl.textContent = "Rule violation — check the highlighted cells.";
       statusEl.classList.add("err");
       return;
     }
-    if (stars.length === SIZE) {
+    if (stars === SIZE) {
       statusEl.textContent = "Solved! All stars found.";
       statusEl.classList.add("win");
       return;
     }
-    const remaining = SIZE - stars.length;
-    statusEl.textContent = `${stars.length} / ${SIZE} stars placed — ${remaining} to go.`;
+    statusEl.textContent = `${stars} / ${SIZE} stars placed — ${SIZE - stars} to go.`;
   }
 
+  function startNewGame() {
+    statusEl.textContent = "Generating a logic-solvable board…";
+    document.getElementById("new").disabled = true;
+    // Defer so the status update paints before the (possibly slow) generation.
+    setTimeout(() => {
+      const puzzle = newPuzzle(SIZE);
+      document.getElementById("new").disabled = false;
+      if (!puzzle) {
+        statusEl.textContent = "Couldn't generate a board — try again.";
+        statusEl.classList.add("err");
+        return;
+      }
+      regions = puzzle.regions;
+      solution = puzzle.solution;
+      state = Array.from({length: SIZE}, () => Array(SIZE).fill(0));
+      buildBoard();
+      render();
+    }, 10);
+  }
+
+  document.getElementById("new").addEventListener("click", startNewGame);
   document.getElementById("reset").addEventListener("click", () => {
     state = Array.from({length: SIZE}, () => Array(SIZE).fill(0));
     render();
   });
   document.getElementById("solve").addEventListener("click", () => {
+    const stars = new Set(solution.map(([r, c]) => `${r},${c}`));
     for (let r = 0; r < SIZE; r++)
       for (let c = 0; c < SIZE; c++)
-        state[r][c] = SOLUTION[r][c] === 1 ? 2 : 1;
+        state[r][c] = stars.has(`${r},${c}`) ? 2 : 1;
     render();
   });
+
+  startNewGame();
 })();
 </script>
 </body>
