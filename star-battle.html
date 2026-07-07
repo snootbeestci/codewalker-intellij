@@ -345,10 +345,12 @@
         }
       }
 
-      // Rule D — shape adjacency: for each group with no star, find cells
-      // 8-adjacent to every remaining candidate. Wherever the star lands, it
-      // will touch those cells, so they must be dots. Catches domino "long
-      // sides", 3-in-a-row middles, T-shape crossbar cells, etc.
+      // Rule D — external-star elimination: for each group with no star, find
+      // outside cells whose full elimination footprint (row, column, region,
+      // and 8-adjacency) would knock out every remaining candidate. Placing a
+      // star there would leave the group with no valid position → that cell
+      // must be a dot. Catches domino long-sides, 3-in-a-row middles, T-shape
+      // crossbars, and the "square below the stem of a J" case.
       for (const g of groups) {
         let stars = 0;
         const unknowns = [];
@@ -357,31 +359,24 @@
           else if (state[r][c] === 0) unknowns.push([r, c]);
         }
         if (stars > 0 || unknowns.length < 2) continue;
-        const neighboursOf = (r, c) => {
-          const set = new Set();
-          for (let dr = -1; dr <= 1; dr++)
-            for (let dc = -1; dc <= 1; dc++) {
-              if (!dr && !dc) continue;
-              const nr = r + dr, nc = c + dc;
-              if (nr < 0 || nc < 0 || nr >= N || nc >= N) continue;
-              set.add(nr * N + nc);
+        const gCells = new Set(g.cells.map(([r, c]) => r * N + c));
+        for (let er = 0; er < N; er++) {
+          for (let ec = 0; ec < N; ec++) {
+            if (state[er][ec] !== 0) continue;
+            if (gCells.has(er * N + ec)) continue;
+            let killsAll = true;
+            for (const [ur, uc] of unknowns) {
+              if (ur === er) continue;
+              if (uc === ec) continue;
+              if (regions[ur][uc] === regions[er][ec]) continue;
+              if (Math.abs(ur - er) <= 1 && Math.abs(uc - ec) <= 1) continue;
+              killsAll = false;
+              break;
             }
-          return set;
-        };
-        let common = neighboursOf(unknowns[0][0], unknowns[0][1]);
-        for (let k = 1; k < unknowns.length && common.size > 0; k++) {
-          const nb = neighboursOf(unknowns[k][0], unknowns[k][1]);
-          const next = new Set();
-          for (const x of common) if (nb.has(x)) next.add(x);
-          common = next;
-        }
-        const unknownKeys = new Set(unknowns.map(([r, c]) => r * N + c));
-        for (const k of common) {
-          if (unknownKeys.has(k)) continue;
-          const r = Math.floor(k / N), c = k % N;
-          if (state[r][c] === 0) {
-            if (!setDot(r, c)) return null;
-            progress = true;
+            if (killsAll) {
+              if (!setDot(er, ec)) return null;
+              progress = true;
+            }
           }
         }
       }
