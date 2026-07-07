@@ -103,7 +103,7 @@
 </head>
 <body>
   <h1>Star Battle</h1>
-  <div class="subtitle">Click to cycle: empty &rarr; dot &rarr; star &rarr; empty (right-click toggles star)</div>
+  <div class="subtitle">Click to cycle empty &rarr; dot &rarr; star &rarr; empty. Drag to fill empties with dots. Right-click toggles a star.</div>
 
   <div class="panel">
     <div id="board"></div>
@@ -485,6 +485,9 @@
   let solution = null;
   let state = null;
   let cellEls = [];
+  let isDragging = false;
+  document.addEventListener("mouseup", () => { isDragging = false; });
+  document.addEventListener("mouseleave", () => { isDragging = false; });
 
   const boardEl = document.getElementById("board");
   const statusEl = document.getElementById("status");
@@ -513,7 +516,20 @@
         div.style.borderLeft   = borderBetween(r, c, r, c - 1);
         div.style.borderRight  = borderBetween(r, c, r, c + 1);
         div.style.borderBottom = borderBetween(r, c, r + 1, c);
-        div.addEventListener("click", () => { state[r][c] = (state[r][c] + 1) % 3; render(); });
+        div.addEventListener("mousedown", (e) => {
+          if (e.button !== 0) return;
+          e.preventDefault();
+          state[r][c] = (state[r][c] + 1) % 3;
+          isDragging = true;
+          render();
+        });
+        div.addEventListener("mouseenter", () => {
+          if (!isDragging) return;
+          if (state[r][c] === 0) {
+            state[r][c] = 1;
+            render();
+          }
+        });
         div.addEventListener("contextmenu", (e) => {
           e.preventDefault();
           state[r][c] = state[r][c] === 2 ? 0 : 2;
