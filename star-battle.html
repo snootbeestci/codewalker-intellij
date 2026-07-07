@@ -74,6 +74,13 @@
   button.secondary { background: #ddd; color: #222; }
   button.secondary:hover { background: #ccc; }
   button:disabled { opacity: 0.5; cursor: wait; }
+  select {
+    padding: 5px 8px;
+    border-radius: 5px;
+    border: 1px solid #bbb;
+    background: white;
+    font-size: 14px;
+  }
   #status {
     margin-top: 14px;
     text-align: center;
@@ -101,6 +108,13 @@
   <div class="panel">
     <div id="board"></div>
     <div class="controls">
+      <label style="display:flex; align-items:center; gap:6px; font-size:14px;">
+        Size
+        <select id="size">
+          <option value="5">5 &times; 5</option>
+          <option value="6">6 &times; 6</option>
+        </select>
+      </label>
       <button id="new">New Game</button>
       <button id="reset" class="secondary">Reset</button>
       <button id="solve" class="secondary">Show Solution</button>
@@ -120,13 +134,14 @@
 
 <script>
 (() => {
-  const SIZE = 5;
+  let SIZE = 5;
   const COLOURS = {
     1: "#f8c8a8",
     2: "#c7e3f7",
     3: "#d8e9c4",
     4: "#f3d0e5",
     5: "#f7e9a8",
+    6: "#d4c4e8",
   };
 
   // ---- Utilities --------------------------------------------------------
@@ -329,6 +344,53 @@
           if (!eliminateFrom((r, c) => regions[r][c] === rg)) return null;
         }
       }
+
+      // Rule C — hidden-pair: for any pair of same-type groups (both empty of
+      // stars), if their combined unknowns span exactly two groups of another
+      // type, those two target groups are exclusively claimed — any cell of
+      // the targets outside the source pair becomes a dot.
+      if (progress) continue; // let singles/intersections settle first
+      const emptyGroups = { row: [], col: [], reg: [] };
+      for (const g of groups) {
+        let stars = 0;
+        const unknowns = [];
+        for (const [r, c] of g.cells) {
+          if (state[r][c] === 1) stars++;
+          else if (state[r][c] === 0) unknowns.push([r, c]);
+        }
+        if (stars === 0 && unknowns.length) emptyGroups[g.type].push({ g, unknowns });
+      }
+      const groupOf = { row: (r) => r, col: (_, c) => c, reg: (r, c) => regions[r][c] };
+      const cellsOfType = (t, key) => {
+        const cells = [];
+        for (let r = 0; r < N; r++)
+          for (let c = 0; c < N; c++)
+            if (groupOf[t](r, c) === key) cells.push([r, c]);
+        return cells;
+      };
+      outer: for (const srcType of ["row", "col", "reg"]) {
+        const list = emptyGroups[srcType];
+        for (let i = 0; i < list.length; i++) {
+          for (let j = i + 1; j < list.length; j++) {
+            const combined = list[i].unknowns.concat(list[j].unknowns);
+            const combinedKey = new Set(combined.map(([r, c]) => r * N + c));
+            for (const dstType of ["row", "col", "reg"]) {
+              if (dstType === srcType) continue;
+              const targets = new Set(combined.map(([r, c]) => groupOf[dstType](r, c)));
+              if (targets.size !== 2) continue;
+              for (const t of targets) {
+                for (const [r, c] of cellsOfType(dstType, t)) {
+                  if (state[r][c] !== 0) continue;
+                  if (combinedKey.has(r * N + c)) continue;
+                  if (!setDot(r, c)) return null;
+                  progress = true;
+                }
+              }
+              if (progress) break outer;
+            }
+          }
+        }
+      }
     }
 
     for (let r = 0; r < N; r++)
@@ -340,7 +402,8 @@
   // ---- Generation loop: keep regenerating until logic solves it ---------
   function newPuzzle(N) {
     const biases = [0, 1, 2, 4];
-    for (let attempt = 0; attempt < 4000; attempt++) {
+    const maxAttempts = N <= 5 ? 4000 : 12000;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const stars = generateStars(N);
       const bias = biases[attempt % biases.length];
       const regions = generateRegions(N, stars, bias);
@@ -370,7 +433,7 @@
 
   const boardEl = document.getElementById("board");
   const statusEl = document.getElementById("status");
-  boardEl.style.gridTemplateColumns = `repeat(${SIZE}, var(--cell-size))`;
+  const sizeEl = document.getElementById("size");
 
   function borderBetween(r1, c1, r2, c2) {
     const sameRegion =
@@ -382,6 +445,9 @@
   function buildBoard() {
     boardEl.innerHTML = "";
     cellEls = [];
+    const cellPx = SIZE <= 5 ? 64 : 56;
+    boardEl.style.gridTemplateColumns = `repeat(${SIZE}, ${cellPx}px)`;
+    boardEl.style.setProperty("--cell-size", `${cellPx}px`);
     for (let r = 0; r < SIZE; r++) {
       const row = [];
       for (let c = 0; c < SIZE; c++) {
@@ -476,6 +542,7 @@
   }
 
   function startNewGame() {
+    SIZE = parseInt(sizeEl.value, 10);
     statusEl.textContent = "Generating a logic-solvable board…";
     document.getElementById("new").disabled = true;
     // Defer so the status update paints before the (possibly slow) generation.
@@ -496,6 +563,7 @@
   }
 
   document.getElementById("new").addEventListener("click", startNewGame);
+  sizeEl.addEventListener("change", startNewGame);
   document.getElementById("reset").addEventListener("click", () => {
     state = Array.from({length: SIZE}, () => Array(SIZE).fill(0));
     render();
