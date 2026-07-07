@@ -381,11 +381,12 @@
         }
       }
 
-      // Rule C — hidden-pair: for any pair of same-type groups (both empty of
-      // stars), if their combined unknowns span exactly two groups of another
-      // type, those two target groups are exclusively claimed — any cell of
-      // the targets outside the source pair becomes a dot.
-      if (progress) continue; // let singles/intersections settle first
+      // Rule C — hidden K-tuple: for any K same-type groups (all empty of
+      // stars), if their combined unknowns span exactly K groups of another
+      // type, those K target groups are exclusively claimed by the source K
+      // — any cell of the target groups outside the source combined cells
+      // becomes a dot. K=2 is a hidden pair; K=3+ generalizes to triples etc.
+      if (progress) continue;
       const emptyGroups = { row: [], col: [], reg: [] };
       for (const g of groups) {
         let stars = 0;
@@ -404,29 +405,47 @@
             if (groupOf[t](r, c) === key) cells.push([r, c]);
         return cells;
       };
+      const applyClaim = (subset, srcType) => {
+        const combined = [];
+        for (const info of subset) for (const cell of info.unknowns) combined.push(cell);
+        const combinedKey = new Set(combined.map(([r, c]) => r * N + c));
+        for (const dstType of ["row", "col", "reg"]) {
+          if (dstType === srcType) continue;
+          const targets = new Set(combined.map(([r, c]) => groupOf[dstType](r, c)));
+          if (targets.size !== subset.length) continue;
+          let localProgress = false;
+          for (const t of targets) {
+            for (const [r, c] of cellsOfType(dstType, t)) {
+              if (state[r][c] !== 0) continue;
+              if (combinedKey.has(r * N + c)) continue;
+              if (!setDot(r, c)) return "contradiction";
+              localProgress = true;
+            }
+          }
+          if (localProgress) return "progress";
+        }
+        return "none";
+      };
+      let ruleCStatus = "none";
       outer: for (const srcType of ["row", "col", "reg"]) {
         const list = emptyGroups[srcType];
-        for (let i = 0; i < list.length; i++) {
-          for (let j = i + 1; j < list.length; j++) {
-            const combined = list[i].unknowns.concat(list[j].unknowns);
-            const combinedKey = new Set(combined.map(([r, c]) => r * N + c));
-            for (const dstType of ["row", "col", "reg"]) {
-              if (dstType === srcType) continue;
-              const targets = new Set(combined.map(([r, c]) => groupOf[dstType](r, c)));
-              if (targets.size !== 2) continue;
-              for (const t of targets) {
-                for (const [r, c] of cellsOfType(dstType, t)) {
-                  if (state[r][c] !== 0) continue;
-                  if (combinedKey.has(r * N + c)) continue;
-                  if (!setDot(r, c)) return null;
-                  progress = true;
-                }
-              }
-              if (progress) break outer;
-            }
+        for (let K = 2; K <= list.length - 1 && ruleCStatus === "none"; K++) {
+          const idx = new Array(K);
+          for (let i = 0; i < K; i++) idx[i] = i;
+          while (ruleCStatus === "none") {
+            const subset = idx.map(i => list[i]);
+            const r = applyClaim(subset, srcType);
+            if (r === "contradiction") { ruleCStatus = "contradiction"; break outer; }
+            if (r === "progress") { progress = true; ruleCStatus = "progress"; break outer; }
+            let p = K - 1;
+            while (p >= 0 && idx[p] === list.length - K + p) p--;
+            if (p < 0) break;
+            idx[p]++;
+            for (let q = p + 1; q < K; q++) idx[q] = idx[q - 1] + 1;
           }
         }
       }
+      if (ruleCStatus === "contradiction") return null;
     }
 
     for (let r = 0; r < N; r++)
