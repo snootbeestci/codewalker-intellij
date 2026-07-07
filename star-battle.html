@@ -345,6 +345,47 @@
         }
       }
 
+      // Rule D — shape adjacency: for each group with no star, find cells
+      // 8-adjacent to every remaining candidate. Wherever the star lands, it
+      // will touch those cells, so they must be dots. Catches domino "long
+      // sides", 3-in-a-row middles, T-shape crossbar cells, etc.
+      for (const g of groups) {
+        let stars = 0;
+        const unknowns = [];
+        for (const [r, c] of g.cells) {
+          if (state[r][c] === 1) stars++;
+          else if (state[r][c] === 0) unknowns.push([r, c]);
+        }
+        if (stars > 0 || unknowns.length < 2) continue;
+        const neighboursOf = (r, c) => {
+          const set = new Set();
+          for (let dr = -1; dr <= 1; dr++)
+            for (let dc = -1; dc <= 1; dc++) {
+              if (!dr && !dc) continue;
+              const nr = r + dr, nc = c + dc;
+              if (nr < 0 || nc < 0 || nr >= N || nc >= N) continue;
+              set.add(nr * N + nc);
+            }
+          return set;
+        };
+        let common = neighboursOf(unknowns[0][0], unknowns[0][1]);
+        for (let k = 1; k < unknowns.length && common.size > 0; k++) {
+          const nb = neighboursOf(unknowns[k][0], unknowns[k][1]);
+          const next = new Set();
+          for (const x of common) if (nb.has(x)) next.add(x);
+          common = next;
+        }
+        const unknownKeys = new Set(unknowns.map(([r, c]) => r * N + c));
+        for (const k of common) {
+          if (unknownKeys.has(k)) continue;
+          const r = Math.floor(k / N), c = k % N;
+          if (state[r][c] === 0) {
+            if (!setDot(r, c)) return null;
+            progress = true;
+          }
+        }
+      }
+
       // Rule C — hidden-pair: for any pair of same-type groups (both empty of
       // stars), if their combined unknowns span exactly two groups of another
       // type, those two target groups are exclusively claimed — any cell of
